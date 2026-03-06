@@ -97,10 +97,7 @@ public class MetadataImportPerImagePluginTest {
         createTestExcel(excelFile, createTestRows());
 
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
-        plugin.columnUri = "URI";
-        plugin.columnStructure = "Structure";
         plugin.columnLabel = "Label";
-        plugin.columnCaption = "Caption";
 
         List<Map<String, String>> rows = plugin.parseExcel(excelFile.getAbsolutePath());
 

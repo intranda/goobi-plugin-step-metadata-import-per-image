@@ -15,11 +15,8 @@
         <!-- Path to the Excel file (.xlsx). Supports Goobi variable replacement, e.g. {processfolder} -->
         <excelFile>{processfolder}import.xlsx</excelFile>
 
-        <!-- Column header names in the Excel file -->
-        <columnUri>URI</columnUri>
-        <columnStructure>Structure</columnStructure>
+        <!-- Column header name in the Excel file whose value is used as the physical page label (ORDERLABEL) -->
         <columnLabel>Label</columnLabel>
-        <columnCaption>Caption</columnCaption>
 
         <!--
             Ordered hierarchy levels to create beneath the logical root element.
@@ -34,9 +31,6 @@
             <level structType="Folder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
             <level structType="Item" groupByColumn="Caption" metadataField="TitleDocMain"/>
         </hierarchy>
-
-        <!-- display button to finish the task directly from within the entered plugin -->
-        <allowTaskFinishButtons>true</allowTaskFinishButtons>
     </config>
 
 </config_plugin>
