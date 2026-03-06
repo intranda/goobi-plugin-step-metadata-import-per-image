@@ -1,0 +1,1 @@
+This file is used by Jenkins to make sure that the `sonarcloud` step is not run, to avoid publishing sourcecode accidentally.

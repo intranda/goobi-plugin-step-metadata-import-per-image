@@ -1,0 +1,12 @@
+<project default="devbuild">
+
+	<!-- Use this task to let ant copy the compiled jar files to the target folders for development  -->
+	<target name="devbuild">
+		<exec executable="mvn">
+			<arg value="package"/>
+		</exec>
+		<copy file="module-base/target/plugin-step-kick-start-base.jar" todir="/opt/digiverso/goobi/plugins/step/" overwrite="true"/>
+		<copy file="module-gui/target/plugin-step-kick-start-gui.jar" todir="/opt/digiverso/goobi/plugins/GUI/" overwrite="true"/>
+	</target>
+
+</project>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mets:mets OBJID="" xsi:schemaLocation="http://www.loc.gov/standards/premis/ http://www.loc.gov/standards/premis/v2/premis-v2-0.xsd http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-7.xsd http://www.loc.gov/METS/ http://www.loc.gov/standards/mets/mets.xsd http://www.loc.gov/standards/mix/ http://www.loc.gov/standards/mix/mix.xsd" xmlns:mets="http://www.loc.gov/METS/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:mods="http://www.loc.gov/mods/v3" xmlns:goobi="http://meta.goobi.org/v1.5.1/" xmlns:xlink="http://www.w3.org/1999/xlink">
+   <mets:metsHdr CREATEDATE="2022-07-11T09:24:26Z">
+      <mets:agent OTHERTYPE="SOFTWARE" ROLE="CREATOR" TYPE="OTHER">
+         <mets:name>Goobi -  - 2022-07-08T08:58:20Z</mets:name>
+         <mets:note>Goobi</mets:note>
+      </mets:agent>
+   </mets:metsHdr>
+   <mets:dmdSec ID="DMDLOG_0000">
+      <mets:mdWrap MDTYPE="MODS">
+         <mets:xmlData>
+            <mods:mods>
+               <mods:extension>
+                  <goobi:goobi>
+                     <goobi:metadata name="PlaceOfPublication">Place of Publication</goobi:metadata>
+                     <goobi:metadata name="PublisherName">Publisher</goobi:metadata>
+                     <goobi:metadata name="TitleDocMainShort">Sorting title</goobi:metadata>
+                     <goobi:metadata name="TitleDocSub1">Sub title</goobi:metadata>
+                     <goobi:metadata name="singleDigCollection">Collection</goobi:metadata>
+                     <goobi:metadata name="DocLanguage">ger</goobi:metadata>
+                     <goobi:metadata name="CatalogIDDigital">12345678</goobi:metadata>
+                     <goobi:metadata name="TitleDocMain">Main title</goobi:metadata>
+                     <goobi:metadata name="Author" type="person">
+                        <goobi:lastName>Lastname</goobi:lastName>
+                        <goobi:firstName>Firstname</goobi:firstName>
+                        <goobi:displayName>Lastname, Firstname</goobi:displayName>
+                     </goobi:metadata>
+                     <goobi:metadata name="Author" type="person">
+                        <goobi:lastName>Lastname2</goobi:lastName>
+                        <goobi:firstName>Firstname2</goobi:firstName>
+                        <goobi:displayName>Lastname2, Firstname2</goobi:displayName>
+                     </goobi:metadata>
+                  </goobi:goobi>
+               </mods:extension>
+            </mods:mods>
+         </mets:xmlData>
+      </mets:mdWrap>
+   </mets:dmdSec>
+   <mets:structMap TYPE="LOGICAL">
+      <mets:div DMDID="DMDLOG_0000" ID="LOG_0000" TYPE="MultiVolumeWork">
+         <mets:div ID="LOG_0001" TYPE="Volume">
+            <mets:mptr LOCTYPE="URL" xlink:href=""/>
+         </mets:div>
+      </mets:div>
+   </mets:structMap>
+</mets:mets>
