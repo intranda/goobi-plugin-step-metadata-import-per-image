@@ -5,15 +5,36 @@
           2.) step name matches and project is *
           3.) project name matches and step name is *
           4.) project name and step name are *
-	-->
-    
+    -->
+
     <config>
-        <!-- which projects to use for (can be more then one, otherwise use *) -->
+        <!-- which projects to use for (can be more than one, otherwise use *) -->
         <project>*</project>
         <step>*</step>
-        
-        <!-- sample parameter -->
-        <value>test</value>
+
+        <!-- Path to the Excel file (.xlsx). Supports Goobi variable replacement, e.g. {processfolder} -->
+        <excelFile>{processfolder}import.xlsx</excelFile>
+
+        <!-- Column header names in the Excel file -->
+        <columnUri>URI</columnUri>
+        <columnStructure>Structure</columnStructure>
+        <columnLabel>Label</columnLabel>
+        <columnCaption>Caption</columnCaption>
+
+        <!--
+            Ordered hierarchy levels to create beneath the logical root element.
+            Attributes:
+              structType     - DocStruct type name as defined in the ruleset
+              groupByColumn  - Excel column header whose value determines when a new element is started
+              metadataField  - Metadata type to assign the group key as value (optional)
+              fallbackTitle  - Value to use when the column is empty (optional)
+        -->
+        <hierarchy>
+            <level structType="ArchivalObject" groupByColumn="URI" metadataField="TitleDocMain"/>
+            <level structType="Folder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
+            <level structType="Item" groupByColumn="Caption" metadataField="TitleDocMain"/>
+        </hierarchy>
+
         <!-- display button to finish the task directly from within the entered plugin -->
         <allowTaskFinishButtons>true</allowTaskFinishButtons>
     </config>
