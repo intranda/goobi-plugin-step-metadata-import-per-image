@@ -41,6 +41,23 @@ avoided as well. Make good suggestions.
 When the validation passes and the plugin executes, it creates a backup copy of the `meta.xml` file beforehand. The core application
 contains logic to do this.
 
+# Implementation Status
+Core logic is complete. The plugin is a `PluginGuiType.NONE` automatic step plugin.
+
+## Key design decisions
+- `module-gui/` was removed; no UI needed.
+- The plugin's `DigitalDocument.getLogicalDocStruct()` returns the anchor root for multi-volume structures; `getContentRoot()` skips the anchor and returns the first child (the actual content root).
+- Physical pages are accessed via `getPhysicalDocStruct().getAllChildren()`.
+- `BackupFileManager.createBackup()` is called only when `getNumberOfMetaBackups() > 0`.
+- Hierarchy levels are configured as `<level structType="..." groupByColumn="..." metadataField="..." fallbackTitle="..."/>` within a `<hierarchy>` element.
+- Configuration fields in the plugin class are package-private (no modifier) to allow direct assignment in tests.
+- UGH exceptions: `Fileformat.getDigitalDocument()` throws `PreferencesException`; `DigitalDocument.createDocStruct()` throws `TypeNotAllowedForParentException`.
+
+## Test notes
+- Test ruleset uses: Volume (anchor child, top-level) > Chapter > Chapter > Figure hierarchy.
+- MultiVolumeWork is the anchor type (`anchor="true"` in ruleset).
+- Test rows (10 rows matching the 10 pages in meta.xml) are created in-memory; no binary Excel test resource.
+
 # General
 Create a plan for the implementation prior to execution.
 If you find additional information that is relevant for the context, suggest to update the context accordingly for future sessions.
