@@ -5,16 +5,32 @@
           2.) step name matches and project is *
           3.) project name matches and step name is *
           4.) project name and step name are *
-	-->
-    
+    -->
+
     <config>
-        <!-- which projects to use for (can be more then one, otherwise use *) -->
+        <!-- which projects to use for (can be more than one, otherwise use *) -->
         <project>*</project>
         <step>*</step>
-        
-        <!-- sample parameter -->
-        <value>test</value>
-        <!-- display button to finish the task directly from within the entered plugin -->
+
+        <!-- Path to the Excel file; overridden programmatically in tests -->
+        <excelFile>/tmp/test_import.xlsx</excelFile>
+
+        <!-- Column header names in the Excel file -->
+        <columnUri>URI</columnUri>
+        <columnStructure>Structure</columnStructure>
+        <columnLabel>Label</columnLabel>
+        <columnCaption>Caption</columnCaption>
+
+        <!--
+            Hierarchy using struct types available in the test ruleset.
+            Volume (root) > Chapter (ArchivalObject) > Chapter (Folder) > Figure (Item)
+        -->
+        <hierarchy>
+            <level structType="Chapter" groupByColumn="URI" metadataField="TitleDocMain"/>
+            <level structType="Chapter" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
+            <level structType="Figure" groupByColumn="Caption" metadataField="TitleDocMain"/>
+        </hierarchy>
+
         <allowTaskFinishButtons>true</allowTaskFinishButtons>
     </config>
 
