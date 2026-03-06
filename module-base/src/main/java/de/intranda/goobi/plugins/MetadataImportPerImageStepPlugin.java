@@ -74,16 +74,11 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     private String title = "intranda_step_metadata_import_per_image";
     @Getter
     private Step step;
-    @Getter
-    private boolean allowTaskFinishButtons;
     private String returnPath;
 
     // Configuration (package-private for testing)
     String excelFilePath;
-    String columnUri;
-    String columnStructure;
     String columnLabel;
-    String columnCaption;
     List<HierarchyLevel> hierarchyLevels;
 
     @Override
@@ -92,12 +87,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         this.step = step;
 
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        allowTaskFinishButtons = myconfig.getBoolean("allowTaskFinishButtons", false);
         excelFilePath = myconfig.getString("excelFile", "");
-        columnUri = myconfig.getString("columnUri", "URI");
-        columnStructure = myconfig.getString("columnStructure", "Structure");
         columnLabel = myconfig.getString("columnLabel", "Label");
-        columnCaption = myconfig.getString("columnCaption", "Caption");
 
         hierarchyLevels = new ArrayList<>();
         List<HierarchicalConfiguration> levelConfigs = myconfig.configurationsAt("hierarchy.level");

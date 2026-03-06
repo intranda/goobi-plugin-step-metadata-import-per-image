@@ -15,11 +15,8 @@
         <!-- Path to the Excel file; overridden programmatically in tests -->
         <excelFile>/tmp/test_import.xlsx</excelFile>
 
-        <!-- Column header names in the Excel file -->
-        <columnUri>URI</columnUri>
-        <columnStructure>Structure</columnStructure>
+        <!-- Column header name used as physical page label -->
         <columnLabel>Label</columnLabel>
-        <columnCaption>Caption</columnCaption>
 
         <!--
             Hierarchy using struct types available in the test ruleset.
@@ -30,8 +27,6 @@
             <level structType="Chapter" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
             <level structType="Figure" groupByColumn="Caption" metadataField="TitleDocMain"/>
         </hierarchy>
-
-        <allowTaskFinishButtons>true</allowTaskFinishButtons>
     </config>
 
 </config_plugin>
