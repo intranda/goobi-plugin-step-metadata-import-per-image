@@ -7,7 +7,7 @@
     <relativePath />
   </parent>
   <groupId>io.goobi.workflow.plugin</groupId>
-  <artifactId>plugin-step-kick-start</artifactId>
+  <artifactId>plugin-step-metadata-import-per-image</artifactId>
   <packaging>pom</packaging>
   <modules>
     <module>module-base</module>

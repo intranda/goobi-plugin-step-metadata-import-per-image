@@ -5,8 +5,8 @@
 		<exec executable="mvn">
 			<arg value="package"/>
 		</exec>
-		<copy file="module-base/target/plugin-step-kick-start-base.jar" todir="/opt/digiverso/goobi/plugins/step/" overwrite="true"/>
-		<copy file="module-gui/target/plugin-step-kick-start-gui.jar" todir="/opt/digiverso/goobi/plugins/GUI/" overwrite="true"/>
+		<copy file="module-base/target/plugin-step-metadata-import-per-image-base.jar" todir="/opt/digiverso/goobi/plugins/step/" overwrite="true"/>
+		<copy file="module-gui/target/plugin-step-metadata-import-per-image-gui.jar" todir="/opt/digiverso/goobi/plugins/GUI/" overwrite="true"/>
 	</target>
 
 </project>

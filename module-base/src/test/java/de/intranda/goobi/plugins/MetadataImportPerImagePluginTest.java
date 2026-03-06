@@ -43,7 +43,7 @@ import ugh.fileformats.mets.MetsMods;
 @PrepareForTest({ MetadatenHelper.class, VariableReplacer.class, ConfigurationHelper.class, ProcessManager.class,
         MetadataManager.class })
 @PowerMockIgnore({ "javax.management.*", "javax.xml.*", "org.xml.*", "org.w3c.*", "javax.net.ssl.*", "jdk.internal.reflect.*" })
-public class KickStartPluginTest {
+public class MetadataImportPerImagePluginTest {
 
     private static String resourcesFolder;
 
@@ -71,13 +71,13 @@ public class KickStartPluginTest {
 
     @Test
     public void testConstructor() throws Exception {
-        KickStartStepPlugin plugin = new KickStartStepPlugin();
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         assertNotNull(plugin);
     }
 
     @Test
     public void testInit() {
-        KickStartStepPlugin plugin = new KickStartStepPlugin();
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
         assertEquals(step.getTitel(), plugin.getStep().getTitel());
     }
@@ -154,7 +154,7 @@ public class KickStartPluginTest {
 
     public Process getProcess() {
         Project project = new Project();
-        project.setTitel("KickStartProject");
+        project.setTitel("MetadataImportPerImageProject");
 
         Process process = new Process();
         process.setTitel("00469418X");
