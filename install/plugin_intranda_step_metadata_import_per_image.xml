@@ -13,7 +13,7 @@
         <step>*</step>
 
         <!-- Path to the Excel file (.xlsx). Supports Goobi variable replacement, e.g. {processfolder} -->
-        <excelFile>{processfolder}import.xlsx</excelFile>
+        <excelFile>{folder.images.import}metadata.xlsx</excelFile>
 
         <!-- Column header name in the Excel file whose value is used as the physical page label (ORDERLABEL) -->
         <columnLabel>Label</columnLabel>
@@ -28,8 +28,8 @@
         -->
         <hierarchy>
             <level structType="ArchivalObject" groupByColumn="URI" metadataField="TitleDocMain"/>
-            <level structType="Folder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
-            <level structType="Item" groupByColumn="Caption" metadataField="TitleDocMain"/>
+            <level structType="ArchivalFolder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
+            <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain"/>
         </hierarchy>
     </config>
 
