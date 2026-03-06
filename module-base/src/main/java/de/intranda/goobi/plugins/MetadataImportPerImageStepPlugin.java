@@ -48,10 +48,12 @@ import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.config.ConfigurationHelper;
+import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.goobi.production.enums.LogType;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
 import ugh.dl.DigitalDocument;
 import ugh.dl.DocStruct;
@@ -61,10 +63,7 @@ import ugh.dl.Metadata;
 import ugh.dl.MetadataType;
 import ugh.dl.Prefs;
 import ugh.dl.Reference;
-import ugh.exceptions.MetadataTypeNotAllowedException;
-import ugh.exceptions.PreferencesException;
-import ugh.exceptions.TypeNotAllowedAsChildException;
-import ugh.exceptions.TypeNotAllowedForParentException;
+import ugh.exceptions.*;
 
 @PluginImplementation
 @Log4j2
@@ -150,8 +149,21 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         Process process = step.getProzess();
         log.info("Running MetadataImportPerImage plugin for process {}", process.getTitel());
 
-        // Resolve Excel file path with variable replacement
-        String resolvedExcelPath = VariableReplacer.simpleReplace(excelFilePath, process);
+        // Read metadata file — used for variable replacement and structure building
+        Fileformat fileformat;
+        Prefs prefs;
+        DigitalDocument dd;
+        try {
+            fileformat = process.readMetadataFile();
+            prefs = process.getRegelsatz().getPreferences();
+            dd = fileformat.getDigitalDocument();
+        } catch (Exception e) {
+            return reportError(process, "Failed to read metadata file: " + e.getMessage());
+        }
+
+        // Resolve Excel file path (supports Goobi folder variables like {folder.images.import})
+        VariableReplacer vr = new VariableReplacer(dd, prefs, process, step);
+        String resolvedExcelPath = vr.replace(excelFilePath);
         log.debug("Excel file path resolved to: {}", resolvedExcelPath);
 
         // Parse Excel rows
@@ -159,8 +171,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         try {
             rows = parseExcel(resolvedExcelPath);
         } catch (IOException e) {
-            log.error("Failed to read Excel file {}: {}", resolvedExcelPath, e.getMessage());
-            return PluginReturnValue.ERROR;
+            return reportError(process, "Failed to read Excel file " + resolvedExcelPath + ": " + e.getMessage());
         }
 
         // Get images from master folder
@@ -173,74 +184,62 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     .sorted()
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.error("Failed to list images for process {}: {}", process.getTitel(), e.getMessage());
-            return PluginReturnValue.ERROR;
+            return reportError(process, "Failed to list master folder images: " + e.getMessage());
         }
 
         // Validate: row count must match image count
         if (rows.size() != images.size()) {
-            log.error("Row count mismatch for process {}: Excel has {} data rows, master folder has {} images",
-                    process.getTitel(), rows.size(), images.size());
-            return PluginReturnValue.ERROR;
+            return reportError(process, "Row count mismatch: Excel has " + rows.size()
+                    + " data rows, master folder has " + images.size() + " images");
         }
 
-        // Validate: all configured columns must be present in at least the first row's key set
+        // Validate: all configured grouping columns must exist in the Excel header
         if (!rows.isEmpty()) {
-            Map<String, String> firstRow = rows.get(0);
             List<String> missing = new ArrayList<>();
             for (HierarchyLevel level : hierarchyLevels) {
-                if (StringUtils.isNotBlank(level.groupByColumn) && !firstRow.containsKey(level.groupByColumn)) {
+                if (StringUtils.isNotBlank(level.groupByColumn) && !rows.get(0).containsKey(level.groupByColumn)) {
                     missing.add(level.groupByColumn);
                 }
             }
             if (!missing.isEmpty()) {
-                log.error("Missing columns in Excel for process {}: {}", process.getTitel(), missing);
-                return PluginReturnValue.ERROR;
+                return reportError(process, "Missing columns in Excel: " + missing);
             }
         }
 
         // Create backup of meta.xml before modifying
         try {
-            String metadataFilePath = process.getMetadataFilePath();
-            String processFolder = Paths.get(metadataFilePath).getParent().toString();
+            String processFolder = Paths.get(process.getMetadataFilePath()).getParent().toString();
             int backupCount = ConfigurationHelper.getInstance().getNumberOfMetaBackups();
             if (backupCount > 0) {
                 BackupFileManager.createBackup(processFolder, "meta.xml", backupCount, false);
             }
         } catch (Exception e) {
-            log.error("Failed to create backup for process {}: {}", process.getTitel(), e.getMessage());
-            return PluginReturnValue.ERROR;
-        }
-
-        // Read metadata file
-        Fileformat fileformat;
-        Prefs prefs;
-        try {
-            fileformat = process.readMetadataFile();
-            prefs = process.getRegelsatz().getPreferences();
-        } catch (Exception e) {
-            log.error("Failed to read metadata for process {}: {}", process.getTitel(), e.getMessage());
-            return PluginReturnValue.ERROR;
+            return reportError(process, "Failed to create meta.xml backup: " + e.getMessage());
         }
 
         // Build logical structure from Excel data
         try {
             buildStructure(fileformat, prefs, rows);
         } catch (Exception e) {
-            log.error("Failed to build structure for process {}: {}", process.getTitel(), e.getMessage());
-            return PluginReturnValue.ERROR;
+            return reportError(process, "Failed to build metadata structure: " + e.getMessage());
         }
 
         // Write updated metadata file
         try {
             process.writeMetadataFile(fileformat);
         } catch (Exception e) {
-            log.error("Failed to write metadata for process {}: {}", process.getTitel(), e.getMessage());
-            return PluginReturnValue.ERROR;
+            return reportError(process, "Failed to write metadata file: " + e.getMessage());
         }
 
         log.info("MetadataImportPerImage plugin completed successfully for process {}", process.getTitel());
         return PluginReturnValue.FINISH;
+    }
+
+    private PluginReturnValue reportError(Process process, String message) {
+        log.error(message);
+        Helper.setFehlerMeldungUntranslated(message);
+        Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, message);
+        return PluginReturnValue.ERROR;
     }
 
     /**
