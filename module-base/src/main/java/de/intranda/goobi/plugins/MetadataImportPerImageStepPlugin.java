@@ -203,6 +203,14 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     + " data rows, master folder has " + images.size() + " images");
         }
 
+        // Validate: physical page count in metadata must match row count
+        DocStruct physRoot = dd.getPhysicalDocStruct();
+        int physPageCount = (physRoot != null && physRoot.getAllChildren() != null) ? physRoot.getAllChildren().size() : 0;
+        if (rows.size() != physPageCount) {
+            return reportError(process, "Row count mismatch: Excel has " + rows.size()
+                    + " data rows, metadata has " + physPageCount + " physical pages");
+        }
+
         // Validate: all configured grouping columns must exist in the Excel header
         if (!rows.isEmpty()) {
             List<String> missing = new ArrayList<>();
