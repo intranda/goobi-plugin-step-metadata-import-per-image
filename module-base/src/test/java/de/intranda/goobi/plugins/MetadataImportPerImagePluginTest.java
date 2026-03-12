@@ -214,6 +214,27 @@ public class MetadataImportPerImagePluginTest {
         assertEquals("Chapter", volume.getAllChildren().get(0).getType().getName());
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testBuildStructureWithoutPhysicalPages() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        // Remove all physical page children
+        DocStruct physRoot = ff.getDigitalDocument().getPhysicalDocStruct();
+        if (physRoot.getAllChildren() != null) {
+            for (DocStruct child : new ArrayList<>(physRoot.getAllChildren())) {
+                physRoot.removeChild(child);
+            }
+        }
+
+        List<Map<String, String>> rows = createTestRows();
+        plugin.buildStructure(ff, prefs, rows);
+    }
+
     @Before
     public void setUp() throws Exception {
         metadataDirectory = folder.newFolder("metadata");
