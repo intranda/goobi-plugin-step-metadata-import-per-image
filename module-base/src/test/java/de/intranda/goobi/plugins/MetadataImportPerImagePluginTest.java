@@ -44,6 +44,7 @@ import de.sub.goobi.persistence.managers.MetadataManager;
 import de.sub.goobi.persistence.managers.ProcessManager;
 import ugh.dl.DocStruct;
 import ugh.dl.Fileformat;
+import ugh.dl.MetadataType;
 import ugh.dl.Prefs;
 import ugh.fileformats.mets.MetsMods;
 
@@ -163,9 +164,10 @@ public class MetadataImportPerImagePluginTest {
         plugin.buildStructure(ff, prefs, rows);
 
         List<DocStruct> pages = ff.getDigitalDocument().getPhysicalDocStruct().getAllChildren();
-        assertEquals("p1", pages.get(0).getOrderLabel());
-        assertEquals("p5", pages.get(4).getOrderLabel());
-        assertEquals("p10", pages.get(9).getOrderLabel());
+        MetadataType logicalPageNumber = prefs.getMetadataTypeByName("logicalPageNumber");
+        assertEquals("p1", pages.get(0).getAllMetadataByType(logicalPageNumber).get(0).getValue());
+        assertEquals("p5", pages.get(4).getAllMetadataByType(logicalPageNumber).get(0).getValue());
+        assertEquals("p10", pages.get(9).getAllMetadataByType(logicalPageNumber).get(0).getValue());
     }
 
     @Test
