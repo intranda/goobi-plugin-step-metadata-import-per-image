@@ -349,6 +349,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             TypeNotAllowedForParentException, PreferencesException {
         DigitalDocument document = fileformat.getDigitalDocument();
         DocStruct contentRoot = getContentRoot(document);
+        if (contentRoot == null) {
+            throw new IllegalStateException("No content root found in logical structure");
+        }
 
         final MetadataType logicalPageNumberType = prefs.getMetadataTypeByName("logicalPageNumber");
 
@@ -371,6 +374,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         DocStruct physicalRoot = document.getPhysicalDocStruct();
         if (physicalRoot != null && physicalRoot.getAllChildren() != null) {
             physicalPages.addAll(physicalRoot.getAllChildren());
+        }
+        if (physicalPages.size() < rows.size()) {
+            throw new IllegalStateException("Not enough physical pages (" + physicalPages.size()
+                    + ") for " + rows.size() + " data rows");
         }
 
         int numLevels = hierarchyLevels.size();
