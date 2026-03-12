@@ -51,6 +51,9 @@ import de.sub.goobi.config.ConfigurationHelper;
 import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
+import de.sub.goobi.helper.exceptions.DAOException;
+import de.sub.goobi.helper.exceptions.SwapException;
+import de.sub.goobi.metadaten.MetadatenImagesHelper;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import org.goobi.production.enums.LogType;
@@ -158,6 +161,14 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             dd = fileformat.getDigitalDocument();
         } catch (Exception e) {
             return reportError(process, "Failed to read metadata file: " + e.getMessage());
+        }
+
+        // Ensure pagination structures exist (idempotent — safe to call even when pages already exist)
+        MetadatenImagesHelper mih = new MetadatenImagesHelper(prefs, dd);
+        try {
+            mih.createPagination(process, null);
+        } catch (TypeNotAllowedForParentException | IOException | SwapException | DAOException e) {
+            return reportError(process, "Failed to create pagination: " + e.getMessage());
         }
 
         // Resolve Excel file path (supports Goobi folder variables like {folder.images.import})
