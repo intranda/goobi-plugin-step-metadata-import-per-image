@@ -80,6 +80,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     // Configuration (package-private for testing)
     String excelFilePath;
     String columnLabel;
+    String paginationLabelMetadata = "logicalPageNumber";
     List<HierarchyLevel> hierarchyLevels;
 
     @Override
@@ -353,7 +354,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             throw new IllegalStateException("No content root found in logical structure");
         }
 
-        final MetadataType logicalPageNumberType = prefs.getMetadataTypeByName("logicalPageNumber");
+        final MetadataType logicalPageNumberType = prefs.getMetadataTypeByName(paginationLabelMetadata);
+        if (logicalPageNumberType == null) {
+            log.warn("Metadata type '{}' not found in ruleset; skipping pagination labels", paginationLabelMetadata);
+        }
 
         // Remove existing children of content root
         if (contentRoot.getAllChildren() != null) {
@@ -390,7 +394,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
             // Set pagination label on physical page
             String label = row.getOrDefault(columnLabel, "");
-            if (!label.isEmpty()) {
+            if (logicalPageNumberType != null && !label.isEmpty()) {
                 List<? extends Metadata> pageLabelMetadata = page.getAllMetadataByType(logicalPageNumberType);
                 if (!pageLabelMetadata.isEmpty()) {
                     pageLabelMetadata.getFirst().setValue(label);

@@ -235,6 +235,34 @@ public class MetadataImportPerImagePluginTest {
         plugin.buildStructure(ff, prefs, rows);
     }
 
+    @Test
+    public void testBuildStructureHandlesNullLogicalPageNumberType() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+        plugin.paginationLabelMetadata = "nonExistentMetadataType";
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+        plugin.buildStructure(ff, prefs, rows);
+
+        // Hierarchy structure should still be built correctly
+        DocStruct anchor = ff.getDigitalDocument().getLogicalDocStruct();
+        DocStruct volume = anchor.getAllChildren().get(0);
+        assertNotNull(volume.getAllChildren());
+        assertEquals(2, volume.getAllChildren().size());
+
+        // Pagination labels should NOT have been updated to Excel values
+        List<DocStruct> pages = ff.getDigitalDocument().getPhysicalDocStruct().getAllChildren();
+        MetadataType logicalPageNumber = prefs.getMetadataTypeByName("logicalPageNumber");
+        String firstPageLabel = pages.get(0).getAllMetadataByType(logicalPageNumber).get(0).getValue();
+        assertNotNull(firstPageLabel);
+        // Should still have original value, not "p1" from Excel
+        assertEquals("8", firstPageLabel);
+    }
+
     @Before
     public void setUp() throws Exception {
         metadataDirectory = folder.newFolder("metadata");
