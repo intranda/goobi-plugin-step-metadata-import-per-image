@@ -331,6 +331,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         DigitalDocument document = fileformat.getDigitalDocument();
         DocStruct contentRoot = getContentRoot(document);
 
+        final MetadataType logicalPageNumberType = prefs.getMetadataTypeByName("logicalPageNumber");
+
         // Remove existing children of content root
         if (contentRoot.getAllChildren() != null) {
             for (DocStruct child : new ArrayList<>(contentRoot.getAllChildren())) {
@@ -363,7 +365,14 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             // Set pagination label on physical page
             String label = row.getOrDefault(columnLabel, "");
             if (!label.isEmpty()) {
-                page.setOrderLabel(label);
+                List<? extends Metadata> pageLabelMetadata = page.getAllMetadataByType(logicalPageNumberType);
+                if (!pageLabelMetadata.isEmpty()) {
+                    pageLabelMetadata.getFirst().setValue(label);
+                } else {
+                    Metadata pageLabel = new Metadata(logicalPageNumberType);
+                    pageLabel.setValue(label);
+                    page.addMetadata(pageLabel);
+                }
             }
 
             // Find which level changed first (null currentKeys[lvl] triggers change)
