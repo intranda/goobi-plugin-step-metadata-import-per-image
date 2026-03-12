@@ -68,7 +68,6 @@ import ugh.exceptions.*;
 @PluginImplementation
 @Log4j2
 public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
-
     @Getter
     private String title = "intranda_step_metadata_import_per_image";
     @Getter
@@ -90,13 +89,13 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         columnLabel = myconfig.getString("columnLabel", "Label");
 
         hierarchyLevels = new ArrayList<>();
-        List<HierarchicalConfiguration> levelConfigs = myconfig.configurationsAt("hierarchy.level");
+        List<HierarchicalConfiguration> levelConfigs = myconfig.configurationAt("hierarchy").configurationsAt("level");
         for (HierarchicalConfiguration levelConfig : levelConfigs) {
             HierarchyLevel level = new HierarchyLevel();
-            level.structType = levelConfig.getString("[@structType]", "");
-            level.groupByColumn = levelConfig.getString("[@groupByColumn]", "");
-            level.metadataField = levelConfig.getString("[@metadataField]", "");
-            level.fallbackTitle = levelConfig.getString("[@fallbackTitle]", "");
+            level.structType = levelConfig.getString("@structType", "");
+            level.groupByColumn = levelConfig.getString("@groupByColumn", "");
+            level.metadataField = levelConfig.getString("@metadataField", "");
+            level.fallbackTitle = levelConfig.getString("@fallbackTitle", "");
             hierarchyLevels.add(level);
         }
 
