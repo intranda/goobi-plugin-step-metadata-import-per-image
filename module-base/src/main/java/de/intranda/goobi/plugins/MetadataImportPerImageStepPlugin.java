@@ -371,9 +371,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             log.warn("Metadata type '{}' not found in ruleset; skipping pagination labels", paginationLabelMetadata);
         }
 
-        // Remove existing children of content root
+        // Remove existing children of content root (clean up references first)
         if (contentRoot.getAllChildren() != null) {
             for (DocStruct child : new ArrayList<>(contentRoot.getAllChildren())) {
+                removeReferencesRecursively(child);
                 contentRoot.removeChild(child);
             }
         }
@@ -486,6 +487,24 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             throw new IllegalStateException("Anchor document has no child volumes");
         }
         return root;
+    }
+
+    /**
+     * Recursively removes all TO-references from the given DocStruct and its children.
+     * This ensures that physical pages no longer hold back-references to structures
+     * that are about to be removed.
+     */
+    private void removeReferencesRecursively(DocStruct node) {
+        if (node.getAllToReferences() != null) {
+            for (Reference ref : new ArrayList<>(node.getAllToReferences())) {
+                node.removeReferenceTo(ref.getTarget());
+            }
+        }
+        if (node.getAllChildren() != null) {
+            for (DocStruct child : node.getAllChildren()) {
+                removeReferencesRecursively(child);
+            }
+        }
     }
 
     /**

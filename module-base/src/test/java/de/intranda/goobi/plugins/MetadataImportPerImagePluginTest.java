@@ -48,6 +48,7 @@ import ugh.dl.DocStruct;
 import ugh.dl.Fileformat;
 import ugh.dl.MetadataType;
 import ugh.dl.Prefs;
+import ugh.dl.Reference;
 import ugh.fileformats.mets.MetsMods;
 
 @RunWith(PowerMockRunner.class)
@@ -254,6 +255,51 @@ public class MetadataImportPerImagePluginTest {
         // After rebuild, Volume should have 2 Chapter children (uri1, uri2)
         assertEquals(2, volume.getAllChildren().size());
         assertEquals("Chapter", volume.getAllChildren().get(0).getType().getName());
+    }
+
+    @Test
+    public void testBuildStructureRemovesStaleReferences() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        // First call: build structure with the standard test rows
+        List<Map<String, String>> rows1 = createTestRows();
+        plugin.buildStructure(ff, prefs, rows1);
+
+        // Collect the logical structures created by the first call
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        List<DocStruct> firstCallChildren = new ArrayList<>(volume.getAllChildren());
+
+        // Second call: rebuild with different data (swap uri values)
+        List<Map<String, String>> rows2 = new ArrayList<>();
+        for (Map<String, String> r : rows1) {
+            Map<String, String> copy = new HashMap<>(r);
+            copy.put("URI", "different_" + copy.get("URI"));
+            rows2.add(copy);
+        }
+        plugin.buildStructure(ff, prefs, rows2);
+
+        // Verify: physical pages should NOT have back-references to structures from the first call
+        List<DocStruct> pages = ff.getDigitalDocument().getPhysicalDocStruct().getAllChildren();
+        for (DocStruct page : pages) {
+            if (page.getAllFromReferences() != null) {
+                for (Reference ref : page.getAllFromReferences()) {
+                    for (DocStruct oldChild : firstCallChildren) {
+                        if (ref.getSource() == oldChild) {
+                            throw new AssertionError("Physical page still references a stale logical structure");
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also verify the new structure was built correctly
+        assertEquals(2, volume.getAllChildren().size());
+        assertEquals("different_uri1", volume.getAllChildren().get(0).getAllMetadata().get(0).getValue());
     }
 
     @Test(expected = IllegalStateException.class)
