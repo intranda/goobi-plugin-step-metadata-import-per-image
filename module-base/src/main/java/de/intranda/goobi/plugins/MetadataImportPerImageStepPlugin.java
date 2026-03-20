@@ -143,7 +143,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
     @Override
     public HashMap<String, StepReturnValue> validate() {
-        return null;
+        return new HashMap<>();
     }
 
     @Override
