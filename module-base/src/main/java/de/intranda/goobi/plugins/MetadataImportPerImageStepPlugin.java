@@ -531,9 +531,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             TypeNotAllowedForParentException, PreferencesException {
         DigitalDocument document = fileformat.getDigitalDocument();
         DocStruct contentRoot = getContentRoot(document);
-        if (contentRoot == null) {
-            throw new IllegalStateException("No content root found in logical structure");
-        }
 
         // Remove existing children of content root (clean up references first)
         if (contentRoot.getAllChildren() != null) {
@@ -658,7 +655,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
      */
     private DocStruct getContentRoot(DigitalDocument document) {
         DocStruct root = document.getLogicalDocStruct();
-        if (root != null && root.getType().isAnchor()) {
+        if (root == null) {
+            throw new IllegalStateException("No logical root found in document");
+        }
+        if (root.getType().isAnchor()) {
             List<DocStruct> children = root.getAllChildren();
             if (children != null && !children.isEmpty()) {
                 return children.getFirst();
