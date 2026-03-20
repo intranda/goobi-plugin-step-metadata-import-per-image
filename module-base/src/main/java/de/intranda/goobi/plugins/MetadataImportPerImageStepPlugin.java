@@ -165,7 +165,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             fileformat = process.readMetadataFile();
             prefs = process.getRegelsatz().getPreferences();
             dd = fileformat.getDigitalDocument();
-        } catch (Exception e) {
+        } catch (IOException | PreferencesException | SwapException | ReadException e) {
             return reportError(process, "Failed to read metadata file: " + e.getMessage());
         }
 
