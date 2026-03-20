@@ -488,29 +488,27 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         if (cell == null) {
             return "";
         }
-        CellType type = cell.getCellType();
-        if (type == CellType.ERROR) {
+        return switch (cell.getCellType()) {
+            case ERROR -> "";
+            case NUMERIC -> formatNumericValue(cell.getNumericCellValue());
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            case FORMULA -> getFormulaCellValue(cell);
+            default -> {
+                String val = cell.getStringCellValue();
+                yield val != null ? val : "";
+            }
+        };
+    }
+
+    private String getFormulaCellValue(Cell cell) {
+        if (cell.getCachedFormulaResultType() == CellType.ERROR) {
             return "";
         }
-        if (type == CellType.NUMERIC) {
+        try {
+            return cell.getStringCellValue();
+        } catch (IllegalStateException e) {
             return formatNumericValue(cell.getNumericCellValue());
         }
-        if (type == CellType.BOOLEAN) {
-            return String.valueOf(cell.getBooleanCellValue());
-        }
-        if (type == CellType.FORMULA) {
-            CellType cachedType = cell.getCachedFormulaResultType();
-            if (cachedType == CellType.ERROR) {
-                return "";
-            }
-            try {
-                return cell.getStringCellValue();
-            } catch (IllegalStateException e) {
-                return formatNumericValue(cell.getNumericCellValue());
-            }
-        }
-        String val = cell.getStringCellValue();
-        return val != null ? val : "";
     }
 
     private static String formatNumericValue(double d) {
