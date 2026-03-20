@@ -310,7 +310,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             int sheetCount) {
         ValidationResult result = new ValidationResult();
 
-        // Check 4: empty Excel (0 data rows)
         if (rows.isEmpty()) {
             result.addError("Excel file contains no data rows");
             return result;
@@ -326,7 +325,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     + " data rows, metadata has " + physPageCount + " physical pages");
         }
 
-        // Check 1: label column header missing
         if (!rows.get(0).containsKey(columnLabel)) {
             result.addError("Label column '" + columnLabel + "' not found in Excel headers");
         }
@@ -347,7 +345,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         }
 
         // Per-row checks
-        // Track values seen and last value per groupByColumn for non-contiguous detection (check 7)
+        // Track values seen and last value per groupByColumn for non-contiguous detection
         Map<String, Set<String>> seenValues = new HashMap<>();
         Map<String, String> lastValues = new HashMap<>();
         for (HierarchyLevel level : groupingLevels) {
@@ -359,7 +357,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             Map<String, String> row = rows.get(rowIdx);
             int excelRowNumber = rowIdx + 2; // 1-based, accounting for header
 
-            // Check 3: empty groupByColumn value with no fallback
             for (HierarchyLevel level : groupingLevels) {
                 String value = row.getOrDefault(level.groupByColumn(), "").trim();
                 if (value.isEmpty() && StringUtils.isBlank(level.fallbackTitle())) {
@@ -368,7 +365,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 }
             }
 
-            // Check 6: all grouping columns empty
             if (!groupingLevels.isEmpty()) {
                 boolean allEmpty = true;
                 for (HierarchyLevel level : groupingLevels) {
@@ -383,7 +379,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 }
             }
 
-            // Check 5: XML-invalid control characters in any cell
             for (Map.Entry<String, String> entry : row.entrySet()) {
                 if (containsInvalidXmlChars(entry.getValue())) {
                     result.addError("Row " + excelRowNumber + ", column '" + entry.getKey()
@@ -391,7 +386,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 }
             }
 
-            // Check 7: non-contiguous duplicate keys
             for (HierarchyLevel level : groupingLevels) {
                 String value = row.getOrDefault(level.groupByColumn(), "").trim();
                 if (!value.isEmpty()) {
@@ -407,7 +401,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             }
         }
 
-        // Check 8: multiple sheets
         if (sheetCount > 1) {
             result.addWarning("Workbook contains " + sheetCount + " sheets; only the first sheet is processed");
         }
