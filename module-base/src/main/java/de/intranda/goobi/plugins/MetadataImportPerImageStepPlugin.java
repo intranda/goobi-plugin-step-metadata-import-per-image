@@ -220,11 +220,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         ValidationResult dataValidation = validateExcelData(parseResult.rows(), images.size(), physPageCount,
                 parseResult.sheetCount());
 
-        // Merge parse warnings into data validation warnings
-        for (String warning : parseResult.parseWarnings()) {
-            dataValidation.addWarning(warning);
-        }
-
         if (dataValidation.hasErrors()) {
             return reportValidationErrors(process, dataValidation);
         }
@@ -441,11 +436,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
      * Reads all data rows from the first sheet of the given Excel file.
      * The first row is treated as the header. Each subsequent non-empty row becomes a map of column name to cell value.
      *
-     * @return a ParseResult containing the rows, sheet count, and any parse warnings
+     * @return a ParseResult containing the rows and sheet count
      */
     ParseResult parseExcel(String filePath) throws IOException {
         List<Map<String, String>> rows = new ArrayList<>();
-        List<String> parseWarnings = new ArrayList<>();
         int sheetCount;
         try (Workbook workbook = WorkbookFactory.create(Paths.get(filePath).toFile())) {
             sheetCount = workbook.getNumberOfSheets();
@@ -494,7 +488,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 rows.add(rowData);
             }
         }
-        return new ParseResult(rows, sheetCount, parseWarnings);
+        return new ParseResult(rows, sheetCount);
     }
 
     private String getCellValue(Cell cell) {
@@ -732,6 +726,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         }
     }
 
-    record ParseResult(List<Map<String, String>> rows, int sheetCount, List<String> parseWarnings) {
+    record ParseResult(List<Map<String, String>> rows, int sheetCount) {
     }
 }
