@@ -214,7 +214,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         int physPageCount = (physRoot != null && physRoot.getAllChildren() != null) ? physRoot.getAllChildren().size() : 0;
 
         // Validate Excel data
-        ValidationResult dataValidation = validateExcelData(parseResult.rows(), prefs, images.size(), physPageCount,
+        ValidationResult dataValidation = validateExcelData(parseResult.rows(), images.size(), physPageCount,
                 parseResult.sheetCount());
 
         // Merge parse warnings into data validation warnings
@@ -308,7 +308,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
      * Validates the parsed Excel data against expected constraints.
      * Collects all errors and warnings rather than failing on the first problem.
      */
-    ValidationResult validateExcelData(List<Map<String, String>> rows, Prefs prefs, int imageCount, int physPageCount,
+    ValidationResult validateExcelData(List<Map<String, String>> rows, int imageCount, int physPageCount,
             int sheetCount) {
         ValidationResult result = new ValidationResult();
 

@@ -424,7 +424,7 @@ public class MetadataImportPerImagePluginTest {
         rows.add(row);
 
         // imageCount=5 != rows.size()=1, physPageCount=3 != rows.size()=1, missing column "MissingColumn"
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 5, 3, 1);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 5, 3, 1);
 
         assertTrue("Expected multiple errors", result.errors.size() >= 2);
     }
@@ -471,7 +471,7 @@ public class MetadataImportPerImagePluginTest {
         row.put("URI", "uri1");
         rows.add(row);
 
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 1);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 1);
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the missing label column",
@@ -530,7 +530,7 @@ public class MetadataImportPerImagePluginTest {
         row2.put("Label", "p2");
         rows.add(row2);
 
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 2, 2, 1);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 2, 2, 1);
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the row and column",
@@ -545,7 +545,7 @@ public class MetadataImportPerImagePluginTest {
 
         List<Map<String, String>> rows = new ArrayList<>(); // empty
 
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 0, 0, 1);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 0, 0, 1);
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention no data rows",
@@ -564,7 +564,7 @@ public class MetadataImportPerImagePluginTest {
         row.put("URI", "uri\u0003value"); // contains control char 0x03
         rows.add(row);
 
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 1);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 1);
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention XML control characters",
@@ -589,7 +589,7 @@ public class MetadataImportPerImagePluginTest {
         row.put("Label", "p1");
         rows.add(row);
 
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 1);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 1);
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention all grouping columns empty",
@@ -620,7 +620,7 @@ public class MetadataImportPerImagePluginTest {
         row3.put("Label", "p3");
         rows.add(row3);
 
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 3, 3, 1);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 3, 3, 1);
 
         assertFalse("Should not have errors", result.hasErrors());
         assertFalse("Should have warnings", result.warnings.isEmpty());
@@ -639,7 +639,7 @@ public class MetadataImportPerImagePluginTest {
         row.put("Label", "p1");
         rows.add(row);
 
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 3);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 3);
 
         assertFalse("Should not have errors", result.hasErrors());
         assertFalse("Should have warnings", result.warnings.isEmpty());
