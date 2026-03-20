@@ -277,6 +277,27 @@ public class MetadataImportPerImagePluginTest {
         plugin.buildStructure(ff, prefs, rows);
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testBuildStructureThrowsForAnchorWithoutChildren() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        // Remove all children from the anchor
+        DocStruct anchor = ff.getDigitalDocument().getLogicalDocStruct();
+        if (anchor.getAllChildren() != null) {
+            for (DocStruct child : new ArrayList<>(anchor.getAllChildren())) {
+                anchor.removeChild(child);
+            }
+        }
+
+        List<Map<String, String>> rows = createTestRows();
+        plugin.buildStructure(ff, prefs, rows);
+    }
+
     @Test
     public void testBuildStructureHandlesNullLogicalPageNumberType() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();

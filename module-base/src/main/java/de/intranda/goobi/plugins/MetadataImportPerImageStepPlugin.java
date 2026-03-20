@@ -483,6 +483,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             if (children != null && !children.isEmpty()) {
                 return children.get(0);
             }
+            throw new IllegalStateException("Anchor document has no child volumes");
         }
         return root;
     }
