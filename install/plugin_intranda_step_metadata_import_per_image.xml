@@ -18,6 +18,9 @@
         <!-- Column header name in the Excel file whose value is used as the physical page label (ORDERLABEL) -->
         <columnLabel>Label</columnLabel>
 
+        <!-- Metadata type name used for storing the pagination label on physical pages -->
+        <paginationLabelMetadata>logicalPageNumber</paginationLabelMetadata>
+
         <!--
             Ordered hierarchy levels to create beneath the logical root element.
             Attributes:

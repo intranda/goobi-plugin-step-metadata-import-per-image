@@ -18,6 +18,9 @@
         <!-- Column header name used as physical page label -->
         <columnLabel>Label</columnLabel>
 
+        <!-- Metadata type name used for storing the pagination label on physical pages -->
+        <paginationLabelMetadata>logicalPageNumber</paginationLabelMetadata>
+
         <!--
             Hierarchy using struct types available in the test ruleset.
             Volume (root) > Chapter (ArchivalObject) > Chapter (Folder) > Figure (Item)

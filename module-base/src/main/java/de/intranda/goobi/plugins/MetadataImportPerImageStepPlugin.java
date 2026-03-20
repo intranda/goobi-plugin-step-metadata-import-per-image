@@ -91,6 +91,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
         excelFilePath = myconfig.getString("excelFile", "");
         columnLabel = myconfig.getString("columnLabel", "Label");
+        paginationLabelMetadata = myconfig.getString("paginationLabelMetadata", "logicalPageNumber");
 
         hierarchyLevels = new ArrayList<>();
         List<HierarchicalConfiguration> levelConfigs = myconfig.configurationAt("hierarchy").configurationsAt("level");

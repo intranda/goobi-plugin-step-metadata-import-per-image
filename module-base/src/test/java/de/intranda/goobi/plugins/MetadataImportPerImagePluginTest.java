@@ -92,6 +92,13 @@ public class MetadataImportPerImagePluginTest {
     }
 
     @Test
+    public void testInitReadsPaginationLabelMetadata() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        assertEquals("logicalPageNumber", plugin.paginationLabelMetadata);
+    }
+
+    @Test
     public void testParseExcel() throws Exception {
         // Create a test Excel file with known content
         File excelFile = folder.newFile("test.xlsx");
