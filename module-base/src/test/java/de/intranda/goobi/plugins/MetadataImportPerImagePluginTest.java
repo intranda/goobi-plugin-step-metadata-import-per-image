@@ -2,6 +2,7 @@ package de.intranda.goobi.plugins;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -110,15 +111,15 @@ public class MetadataImportPerImagePluginTest {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.columnLabel = "Label";
 
-        List<Map<String, String>> rows = plugin.parseExcel(excelFile.getAbsolutePath());
+        MetadataImportPerImageStepPlugin.ParseResult result = plugin.parseExcel(excelFile.getAbsolutePath());
 
-        assertEquals(10, rows.size());
-        assertEquals("uri1", rows.get(0).get("URI"));
-        assertEquals("folder1", rows.get(0).get("Structure"));
-        assertEquals("p1", rows.get(0).get("Label"));
-        assertEquals("caption1", rows.get(0).get("Caption"));
+        assertEquals(10, result.rows.size());
+        assertEquals("uri1", result.rows.get(0).get("URI"));
+        assertEquals("folder1", result.rows.get(0).get("Structure"));
+        assertEquals("p1", result.rows.get(0).get("Label"));
+        assertEquals("caption1", result.rows.get(0).get("Caption"));
         // Row with empty structure
-        assertEquals("", rows.get(8).get("Structure"));
+        assertEquals("", result.rows.get(8).get("Structure"));
     }
 
     @Test
@@ -147,11 +148,11 @@ public class MetadataImportPerImagePluginTest {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.columnLabel = "Label";
 
-        List<Map<String, String>> rows = plugin.parseExcel(excelFile.getAbsolutePath());
-        assertEquals(1, rows.size());
+        MetadataImportPerImageStepPlugin.ParseResult result = plugin.parseExcel(excelFile.getAbsolutePath());
+        assertEquals(1, result.rows.size());
         // Error cell should produce an empty string
-        assertEquals("", rows.get(0).get("Structure"));
-        assertEquals("uri1", rows.get(0).get("URI"));
+        assertEquals("", result.rows.get(0).get("Structure"));
+        assertEquals("uri1", result.rows.get(0).get("URI"));
     }
 
     @Test
@@ -370,6 +371,76 @@ public class MetadataImportPerImagePluginTest {
         assertNotNull(firstPageLabel);
         // Should still have original value, not "p1" from Excel
         assertEquals("8", firstPageLabel);
+    }
+
+    @Test
+    public void testValidateExcelDataCollectsMultipleErrors() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level1 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level1.structType = "Chapter";
+        level1.groupByColumn = "URI";
+        level1.metadataField = "TitleDocMain";
+        level1.fallbackTitle = "";
+        plugin.hierarchyLevels.add(level1);
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level2 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level2.structType = "Chapter";
+        level2.groupByColumn = "MissingColumn";
+        level2.metadataField = "TitleDocMain";
+        level2.fallbackTitle = "";
+        plugin.hierarchyLevels.add(level2);
+
+        // Rows that don't have "MissingColumn" and mismatched counts
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> row = new HashMap<>();
+        row.put("URI", "uri1");
+        row.put("Label", "p1");
+        rows.add(row);
+
+        // imageCount=5 != rows.size()=1, physPageCount=3 != rows.size()=1, missing column "MissingColumn"
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 5, 3);
+
+        assertTrue("Expected multiple errors", result.errors.size() >= 2);
+    }
+
+    @Test
+    public void testValidateConfigMissingStructType() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level.structType = "NonExistentType";
+        level.groupByColumn = "URI";
+        level.metadataField = "";
+        level.fallbackTitle = "";
+        plugin.hierarchyLevels.add(level);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention the type name",
+                result.errors.stream().anyMatch(e -> e.contains("NonExistentType")));
+    }
+
+    @Test
+    public void testValidateConfigMissingMetadataField() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level.structType = "Chapter";
+        level.groupByColumn = "URI";
+        level.metadataField = "NonExistentField";
+        level.fallbackTitle = "";
+        plugin.hierarchyLevels.add(level);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention the field name",
+                result.errors.stream().anyMatch(e -> e.contains("NonExistentField")));
     }
 
     @Before

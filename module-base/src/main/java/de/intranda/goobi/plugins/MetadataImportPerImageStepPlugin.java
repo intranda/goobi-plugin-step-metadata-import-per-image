@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -165,6 +166,15 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             return reportError(process, "Failed to read metadata file: " + e.getMessage());
         }
 
+        // Validate configuration against ruleset
+        ValidationResult configValidation = validateConfig(prefs);
+        if (configValidation.hasErrors()) {
+            for (String error : configValidation.errors) {
+                Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, error);
+            }
+            return reportError(process, String.join("; ", configValidation.errors));
+        }
+
         // Ensure pagination structures exist (idempotent — safe to call even when pages already exist)
         MetadatenImagesHelper mih = new MetadatenImagesHelper(prefs, dd);
         try {
@@ -179,9 +189,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         log.debug("Excel file path resolved to: {}", resolvedExcelPath);
 
         // Parse Excel rows
-        List<Map<String, String>> rows;
+        ParseResult parseResult;
         try {
-            rows = parseExcel(resolvedExcelPath);
+            parseResult = parseExcel(resolvedExcelPath);
         } catch (IOException e) {
             return reportError(process, "Failed to read Excel file " + resolvedExcelPath + ": " + e.getMessage());
         }
@@ -199,31 +209,29 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             return reportError(process, "Failed to list master folder images: " + e.getMessage());
         }
 
-        // Validate: row count must match image count
-        if (rows.size() != images.size()) {
-            return reportError(process, "Row count mismatch: Excel has " + rows.size()
-                    + " data rows, master folder has " + images.size() + " images");
-        }
-
-        // Validate: physical page count in metadata must match row count
+        // Count physical pages in metadata
         DocStruct physRoot = dd.getPhysicalDocStruct();
         int physPageCount = (physRoot != null && physRoot.getAllChildren() != null) ? physRoot.getAllChildren().size() : 0;
-        if (rows.size() != physPageCount) {
-            return reportError(process, "Row count mismatch: Excel has " + rows.size()
-                    + " data rows, metadata has " + physPageCount + " physical pages");
+
+        // Validate Excel data
+        ValidationResult dataValidation = validateExcelData(parseResult.rows, prefs, images.size(), physPageCount);
+
+        // Merge parse warnings into data validation warnings
+        for (String warning : parseResult.parseWarnings) {
+            dataValidation.addWarning(warning);
         }
 
-        // Validate: all configured grouping columns must exist in the Excel header
-        if (!rows.isEmpty()) {
-            List<String> missing = new ArrayList<>();
-            for (HierarchyLevel level : hierarchyLevels) {
-                if (StringUtils.isNotBlank(level.groupByColumn) && !rows.get(0).containsKey(level.groupByColumn)) {
-                    missing.add(level.groupByColumn);
-                }
+        if (dataValidation.hasErrors()) {
+            for (String error : dataValidation.errors) {
+                Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, error);
             }
-            if (!missing.isEmpty()) {
-                return reportError(process, "Missing columns in Excel: " + missing);
-            }
+            return reportError(process, String.join("; ", dataValidation.errors));
+        }
+
+        // Log warnings to journal but continue processing
+        for (String warning : dataValidation.warnings) {
+            log.warn(warning);
+            Helper.addMessageToProcessJournal(process.getId(), LogType.WARN, warning);
         }
 
         // Create backup of meta.xml before modifying
@@ -239,7 +247,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
         // Build logical structure from Excel data
         try {
-            buildStructure(fileformat, prefs, rows);
+            buildStructure(fileformat, prefs, parseResult.rows);
         } catch (Exception e) {
             return reportError(process, "Failed to build metadata structure: " + e.getMessage());
         }
@@ -263,12 +271,71 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
+     * Validates the plugin configuration against the given ruleset.
+     * Checks that hierarchy levels are defined and that their struct types
+     * and metadata fields exist in the ruleset.
+     */
+    ValidationResult validateConfig(Prefs prefs) {
+        ValidationResult result = new ValidationResult();
+
+        if (hierarchyLevels == null || hierarchyLevels.isEmpty()) {
+            result.addError("No hierarchy levels configured");
+            return result;
+        }
+
+        for (HierarchyLevel level : hierarchyLevels) {
+            if (prefs.getDocStrctTypeByName(level.structType) == null) {
+                result.addError("Struct type not found in ruleset: " + level.structType);
+            }
+            if (StringUtils.isNotBlank(level.metadataField)
+                    && prefs.getMetadataTypeByName(level.metadataField) == null) {
+                result.addError("Metadata field not found in ruleset: " + level.metadataField);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Validates the parsed Excel data against expected constraints.
+     * Collects all errors and warnings rather than failing on the first problem.
+     */
+    ValidationResult validateExcelData(List<Map<String, String>> rows, Prefs prefs, int imageCount, int physPageCount) {
+        ValidationResult result = new ValidationResult();
+
+        if (rows.size() != imageCount) {
+            result.addError("Row count mismatch: Excel has " + rows.size()
+                    + " data rows, master folder has " + imageCount + " images");
+        }
+
+        if (rows.size() != physPageCount) {
+            result.addError("Row count mismatch: Excel has " + rows.size()
+                    + " data rows, metadata has " + physPageCount + " physical pages");
+        }
+
+        if (!rows.isEmpty()) {
+            for (HierarchyLevel level : hierarchyLevels) {
+                if (StringUtils.isNotBlank(level.groupByColumn) && !rows.get(0).containsKey(level.groupByColumn)) {
+                    result.addError("Missing column in Excel: " + level.groupByColumn);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Reads all data rows from the first sheet of the given Excel file.
      * The first row is treated as the header. Each subsequent non-empty row becomes a map of column name to cell value.
+     *
+     * @return a ParseResult containing the rows, sheet count, and any parse warnings
      */
-    List<Map<String, String>> parseExcel(String filePath) throws IOException {
+    ParseResult parseExcel(String filePath) throws IOException {
         List<Map<String, String>> rows = new ArrayList<>();
+        List<String> parseWarnings = new ArrayList<>();
+        int sheetCount;
         try (Workbook workbook = WorkbookFactory.create(Paths.get(filePath).toFile())) {
+            sheetCount = workbook.getNumberOfSheets();
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
@@ -311,7 +378,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 rows.add(rowData);
             }
         }
-        return rows;
+        return new ParseResult(rows, sheetCount, parseWarnings);
     }
 
     private String getCellValue(Cell cell) {
@@ -525,5 +592,34 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         String groupByColumn;
         String metadataField;
         String fallbackTitle;
+    }
+
+    static class ValidationResult {
+        final List<String> errors = new ArrayList<>();
+        final List<String> warnings = new ArrayList<>();
+
+        void addError(String msg) {
+            errors.add(msg);
+        }
+
+        void addWarning(String msg) {
+            warnings.add(msg);
+        }
+
+        boolean hasErrors() {
+            return !errors.isEmpty();
+        }
+    }
+
+    static class ParseResult {
+        final List<Map<String, String>> rows;
+        final int sheetCount;
+        final List<String> parseWarnings;
+
+        ParseResult(List<Map<String, String>> rows, int sheetCount, List<String> parseWarnings) {
+            this.rows = rows;
+            this.sheetCount = sheetCount;
+            this.parseWarnings = parseWarnings;
+        }
     }
 }
