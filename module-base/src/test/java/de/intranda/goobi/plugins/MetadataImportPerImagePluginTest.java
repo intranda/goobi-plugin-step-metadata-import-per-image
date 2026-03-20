@@ -217,6 +217,37 @@ public class MetadataImportPerImagePluginTest {
     }
 
     @Test
+    public void testBuildStructureClearsExistingPaginationLabelWhenEmpty() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        // Verify page 3 (index 2) has an existing logicalPageNumber ("10" from meta.xml ORDERLABEL)
+        List<DocStruct> pagesBefore = ff.getDigitalDocument().getPhysicalDocStruct().getAllChildren();
+        MetadataType logicalPageNumber = prefs.getMetadataTypeByName("logicalPageNumber");
+        String originalLabel = pagesBefore.get(2).getAllMetadataByType(logicalPageNumber).get(0).getValue();
+        assertEquals("10", originalLabel);
+
+        // Create test rows where row index 2 has an empty label
+        List<Map<String, String>> rows = createTestRows();
+        rows.set(2, row("uri1", "folder1", "", "caption2"));
+
+        plugin.buildStructure(ff, prefs, rows);
+
+        // The page with the empty label should have its logicalPageNumber set to ""
+        List<DocStruct> pagesAfter = ff.getDigitalDocument().getPhysicalDocStruct().getAllChildren();
+        String clearedLabel = pagesAfter.get(2).getAllMetadataByType(logicalPageNumber).get(0).getValue();
+        assertEquals("", clearedLabel);
+
+        // Other pages should still have their labels set from Excel
+        assertEquals("p1", pagesAfter.get(0).getAllMetadataByType(logicalPageNumber).get(0).getValue());
+        assertEquals("p4", pagesAfter.get(3).getAllMetadataByType(logicalPageNumber).get(0).getValue());
+    }
+
+    @Test
     public void testBuildStructureLinksPages() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");

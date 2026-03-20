@@ -583,11 +583,11 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
             // Set pagination label on physical page
             String label = row.getOrDefault(columnLabel, "");
-            if (logicalPageNumberType != null && !label.isEmpty()) {
+            if (logicalPageNumberType != null) {
                 List<? extends Metadata> pageLabelMetadata = page.getAllMetadataByType(logicalPageNumberType);
                 if (!pageLabelMetadata.isEmpty()) {
                     pageLabelMetadata.getFirst().setValue(label);
-                } else {
+                } else if (!label.isEmpty()) {
                     Metadata pageLabel = new Metadata(logicalPageNumberType);
                     pageLabel.setValue(label);
                     page.addMetadata(pageLabel);
