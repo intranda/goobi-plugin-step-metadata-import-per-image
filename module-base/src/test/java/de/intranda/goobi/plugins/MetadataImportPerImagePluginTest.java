@@ -42,11 +42,17 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import de.sub.goobi.config.ConfigurationHelper;
+import de.sub.goobi.helper.Helper;
+import de.sub.goobi.helper.StorageProvider;
+import de.sub.goobi.helper.StorageProviderInterface;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.enums.StepStatus;
 import de.sub.goobi.metadaten.MetadatenHelper;
+import de.sub.goobi.metadaten.MetadatenImagesHelper;
 import de.sub.goobi.persistence.managers.MetadataManager;
 import de.sub.goobi.persistence.managers.ProcessManager;
+import org.goobi.production.enums.PluginReturnValue;
+import org.powermock.api.support.membermodification.MemberModifier;
 import ugh.dl.DocStruct;
 import ugh.dl.Fileformat;
 import ugh.dl.MetadataType;
@@ -56,7 +62,7 @@ import ugh.fileformats.mets.MetsMods;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({ MetadatenHelper.class, VariableReplacer.class, ConfigurationHelper.class, ProcessManager.class,
-        MetadataManager.class })
+        MetadataManager.class, StorageProvider.class, Helper.class, MetadatenImagesHelper.class })
 @PowerMockIgnore({ "javax.management.*", "javax.xml.*", "org.xml.*", "org.w3c.*", "javax.net.ssl.*", "jdk.internal.reflect.*" })
 public class MetadataImportPerImagePluginTest {
 
@@ -659,8 +665,40 @@ public class MetadataImportPerImagePluginTest {
                 result.getErrors().stream().anyMatch(e -> e.contains("No hierarchy levels configured")));
     }
 
+    @Test
+    public void testRunEndToEnd() throws Exception {
+        File excelFile = folder.newFile("import.xlsx");
+        createTestExcel(excelFile, createTestRows());
+
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.excelFilePath = excelFile.getAbsolutePath();
+        plugin.columnLabel = "Label";
+
+        PluginReturnValue result = plugin.run();
+
+        assertEquals(PluginReturnValue.FINISH, result);
+
+        // Read back the written metadata and verify structure
+        Fileformat written = new MetsMods(prefs);
+        written.read(metaTarget.toString());
+        DocStruct anchor = written.getDigitalDocument().getLogicalDocStruct();
+        DocStruct volume = anchor.getAllChildren().get(0);
+
+        // Should have 2 top-level chapters (uri1, uri2)
+        assertNotNull(volume.getAllChildren());
+        assertEquals(2, volume.getAllChildren().size());
+        assertEquals("Chapter", volume.getAllChildren().get(0).getType().getName());
+
+        // Verify page references: volume linked to all 10 pages
+        assertEquals(10, volume.getAllToReferences().size());
+    }
+
     @Before
     public void setUp() throws Exception {
+        MemberModifier.suppress(MemberModifier.method(MetadatenImagesHelper.class, "createPagination",
+                Process.class, String.class));
+
         metadataDirectory = folder.newFolder("metadata");
         processDirectory = new File(metadataDirectory + File.separator + "1");
         processDirectory.mkdirs();
@@ -675,7 +713,7 @@ public class MetadataImportPerImagePluginTest {
         Files.copy(anchorSource, anchorTarget);
 
         PowerMock.mockStatic(ConfigurationHelper.class);
-        ConfigurationHelper configurationHelper = EasyMock.createMock(ConfigurationHelper.class);
+        ConfigurationHelper configurationHelper = EasyMock.createNiceMock(ConfigurationHelper.class);
         EasyMock.expect(ConfigurationHelper.getInstance()).andReturn(configurationHelper).anyTimes();
         EasyMock.expect(configurationHelper.getMetsEditorLockingTime()).andReturn(1800000l).anyTimes();
         EasyMock.expect(configurationHelper.isAllowWhitespacesInFolder()).andReturn(false).anyTimes();
@@ -686,13 +724,19 @@ public class MetadataImportPerImagePluginTest {
         EasyMock.expect(configurationHelper.getRulesetFolder()).andReturn(resourcesFolder).anyTimes();
         EasyMock.expect(configurationHelper.getProcessImagesMainDirectoryName()).andReturn("00469418X_media").anyTimes();
         EasyMock.expect(configurationHelper.isUseMasterDirectory()).andReturn(true).anyTimes();
+        EasyMock.expect(configurationHelper.isCreateMasterDirectory()).andReturn(false).anyTimes();
+        EasyMock.expect(configurationHelper.getProcessImagesMasterDirectoryName()).andReturn("00469418X_master").anyTimes();
+        EasyMock.expect(configurationHelper.getProcessImagesFallbackDirectoryName()).andReturn("").anyTimes();
         EasyMock.expect(configurationHelper.getConfigurationFolder()).andReturn(resourcesFolder).anyTimes();
         EasyMock.expect(configurationHelper.getNumberOfMetaBackups()).andReturn(0).anyTimes();
+        EasyMock.expect(configurationHelper.getScriptCreateDirMeta()).andReturn("").anyTimes();
+        EasyMock.expect(configurationHelper.getGoobiFolder()).andReturn(resourcesFolder).anyTimes();
+        EasyMock.expect(configurationHelper.getScriptsFolder()).andReturn("").anyTimes();
         EasyMock.replay(configurationHelper);
 
-        PowerMock.mockStatic(VariableReplacer.class);
+        PowerMock.mockStaticPartial(VariableReplacer.class, "simpleReplace");
         EasyMock.expect(VariableReplacer.simpleReplace(EasyMock.anyString(), EasyMock.anyObject()))
-                .andReturn("00469418X_media").anyTimes();
+                .andAnswer(() -> (String) EasyMock.getCurrentArguments()[0]).anyTimes();
         PowerMock.replay(VariableReplacer.class);
 
         prefs = new Prefs();
@@ -709,12 +753,44 @@ public class MetadataImportPerImagePluginTest {
         PowerMock.replay(MetadatenHelper.class);
 
         PowerMock.mockStatic(MetadataManager.class);
-        MetadataManager.updateMetadata(1, Collections.emptyMap());
-        MetadataManager.updateJSONMetadata(1, Collections.emptyMap());
+        MetadataManager.updateMetadata(EasyMock.anyInt(), EasyMock.anyObject());
+        EasyMock.expectLastCall().anyTimes();
+        MetadataManager.updateJSONMetadata(EasyMock.anyInt(), EasyMock.anyObject());
+        EasyMock.expectLastCall().anyTimes();
         PowerMock.replay(MetadataManager.class);
+
+        PowerMock.mockStatic(Helper.class);
+        Helper.setFehlerMeldungUntranslated(EasyMock.anyString());
+        EasyMock.expectLastCall().anyTimes();
+        Helper.addMessageToProcessJournal(EasyMock.anyInt(), EasyMock.anyObject(), EasyMock.anyString());
+        EasyMock.expectLastCall().anyTimes();
+        PowerMock.replay(Helper.class);
+
+        PowerMock.mockStatic(StorageProvider.class);
+        StorageProviderInterface spMock = EasyMock.createNiceMock(StorageProviderInterface.class);
+        EasyMock.expect(StorageProvider.getInstance()).andReturn(spMock).anyTimes();
+        EasyMock.expect(spMock.isFileExists(EasyMock.anyObject())).andReturn(true).anyTimes();
+        EasyMock.expect(spMock.listFiles(EasyMock.anyString())).andAnswer(() -> {
+            String dirPath = (String) EasyMock.getCurrentArguments()[0];
+            Path dir = Paths.get(dirPath);
+            if (Files.isDirectory(dir)) {
+                try (var stream = Files.list(dir)) {
+                    return stream.sorted().toList();
+                }
+            }
+            return List.of();
+        }).anyTimes();
+        EasyMock.replay(spMock);
+        PowerMock.replay(StorageProvider.class);
+
         PowerMock.replay(ConfigurationHelper.class);
 
         process = getProcess();
+
+        File masterDir = new File(processDirectory, "images" + File.separator + "00469418X_master");
+        for (int i = 1; i <= 10; i++) {
+            new File(masterDir, String.format("image_%04d.tif", i)).createNewFile();
+        }
 
         Ruleset ruleset = PowerMock.createMock(Ruleset.class);
         ruleset.setTitel("ruleset");
