@@ -277,7 +277,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
             // Map column header to column index
             Map<String, Integer> columnIndex = new HashMap<>();
-            for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
+            for (int c = 0; c < headerRow.getLastCellNum(); c++) {
                 Cell cell = headerRow.getCell(c);
                 if (cell != null) {
                     String header = getCellValue(cell).trim();
@@ -294,7 +294,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     continue;
                 }
                 boolean hasContent = false;
-                for (int c = 0; c <= row.getLastCellNum(); c++) {
+                for (int c = 0; c < row.getLastCellNum(); c++) {
                     if (!getCellValue(row.getCell(c)).trim().isEmpty()) {
                         hasContent = true;
                         break;
