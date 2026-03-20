@@ -115,13 +115,13 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ParseResult result = plugin.parseExcel(excelFile.getAbsolutePath());
 
-        assertEquals(10, result.rows.size());
-        assertEquals("uri1", result.rows.get(0).get("URI"));
-        assertEquals("folder1", result.rows.get(0).get("Structure"));
-        assertEquals("p1", result.rows.get(0).get("Label"));
-        assertEquals("caption1", result.rows.get(0).get("Caption"));
+        assertEquals(10, result.rows().size());
+        assertEquals("uri1", result.rows().get(0).get("URI"));
+        assertEquals("folder1", result.rows().get(0).get("Structure"));
+        assertEquals("p1", result.rows().get(0).get("Label"));
+        assertEquals("caption1", result.rows().get(0).get("Caption"));
         // Row with empty structure
-        assertEquals("", result.rows.get(8).get("Structure"));
+        assertEquals("", result.rows().get(8).get("Structure"));
     }
 
     @Test
@@ -151,10 +151,10 @@ public class MetadataImportPerImagePluginTest {
         plugin.columnLabel = "Label";
 
         MetadataImportPerImageStepPlugin.ParseResult result = plugin.parseExcel(excelFile.getAbsolutePath());
-        assertEquals(1, result.rows.size());
+        assertEquals(1, result.rows().size());
         // Error cell should produce an empty string
-        assertEquals("", result.rows.get(0).get("Structure"));
-        assertEquals("uri1", result.rows.get(0).get("URI"));
+        assertEquals("", result.rows().get(0).get("Structure"));
+        assertEquals("uri1", result.rows().get(0).get("URI"));
     }
 
     @Test
@@ -411,19 +411,10 @@ public class MetadataImportPerImagePluginTest {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.hierarchyLevels = new ArrayList<>();
 
-        MetadataImportPerImageStepPlugin.HierarchyLevel level1 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level1.structType = "Chapter";
-        level1.groupByColumn = "URI";
-        level1.metadataField = "TitleDocMain";
-        level1.fallbackTitle = "";
-        plugin.hierarchyLevels.add(level1);
-
-        MetadataImportPerImageStepPlugin.HierarchyLevel level2 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level2.structType = "Chapter";
-        level2.groupByColumn = "MissingColumn";
-        level2.metadataField = "TitleDocMain";
-        level2.fallbackTitle = "";
-        plugin.hierarchyLevels.add(level2);
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", ""));
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "MissingColumn", "TitleDocMain", ""));
 
         // Rows that don't have "MissingColumn" and mismatched counts
         List<Map<String, String>> rows = new ArrayList<>();
@@ -443,12 +434,8 @@ public class MetadataImportPerImagePluginTest {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.hierarchyLevels = new ArrayList<>();
 
-        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level.structType = "NonExistentType";
-        level.groupByColumn = "URI";
-        level.metadataField = "";
-        level.fallbackTitle = "";
-        plugin.hierarchyLevels.add(level);
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "NonExistentType", "URI", "", ""));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
@@ -462,12 +449,8 @@ public class MetadataImportPerImagePluginTest {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.hierarchyLevels = new ArrayList<>();
 
-        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level.structType = "Chapter";
-        level.groupByColumn = "URI";
-        level.metadataField = "NonExistentField";
-        level.fallbackTitle = "";
-        plugin.hierarchyLevels.add(level);
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "NonExistentField", ""));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
@@ -534,12 +517,8 @@ public class MetadataImportPerImagePluginTest {
         plugin.columnLabel = "Label";
         plugin.hierarchyLevels = new ArrayList<>();
 
-        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level.structType = "Chapter";
-        level.groupByColumn = "URI";
-        level.metadataField = "TitleDocMain";
-        level.fallbackTitle = ""; // no fallback
-        plugin.hierarchyLevels.add(level);
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", "")); // no fallback
 
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> row1 = new HashMap<>();
@@ -598,19 +577,10 @@ public class MetadataImportPerImagePluginTest {
         plugin.columnLabel = "Label";
         plugin.hierarchyLevels = new ArrayList<>();
 
-        MetadataImportPerImageStepPlugin.HierarchyLevel level1 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level1.structType = "Chapter";
-        level1.groupByColumn = "URI";
-        level1.metadataField = "TitleDocMain";
-        level1.fallbackTitle = "Fallback1";
-        plugin.hierarchyLevels.add(level1);
-
-        MetadataImportPerImageStepPlugin.HierarchyLevel level2 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level2.structType = "Chapter";
-        level2.groupByColumn = "Structure";
-        level2.metadataField = "TitleDocMain";
-        level2.fallbackTitle = "Fallback2";
-        plugin.hierarchyLevels.add(level2);
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", "Fallback1"));
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "Structure", "TitleDocMain", "Fallback2"));
 
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> row = new HashMap<>();
@@ -632,12 +602,8 @@ public class MetadataImportPerImagePluginTest {
         plugin.columnLabel = "Label";
         plugin.hierarchyLevels = new ArrayList<>();
 
-        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
-        level.structType = "Chapter";
-        level.groupByColumn = "URI";
-        level.metadataField = "TitleDocMain";
-        level.fallbackTitle = "";
-        plugin.hierarchyLevels.add(level);
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", ""));
 
         // Pattern: A, B, A — non-contiguous
         List<Map<String, String>> rows = new ArrayList<>();

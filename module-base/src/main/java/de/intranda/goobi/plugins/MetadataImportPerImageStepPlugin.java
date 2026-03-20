@@ -100,12 +100,12 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         hierarchyLevels = new ArrayList<>();
         List<HierarchicalConfiguration> levelConfigs = myconfig.configurationAt("hierarchy").configurationsAt("level");
         for (HierarchicalConfiguration levelConfig : levelConfigs) {
-            HierarchyLevel level = new HierarchyLevel();
-            level.structType = levelConfig.getString("@structType", "");
-            level.groupByColumn = levelConfig.getString("@groupByColumn", "");
-            level.metadataField = levelConfig.getString("@metadataField", "");
-            level.fallbackTitle = levelConfig.getString("@fallbackTitle", "");
-            hierarchyLevels.add(level);
+            hierarchyLevels.add(new HierarchyLevel(
+                    levelConfig.getString("@structType", ""),
+                    levelConfig.getString("@groupByColumn", ""),
+                    levelConfig.getString("@metadataField", ""),
+                    levelConfig.getString("@fallbackTitle", "")
+            ));
         }
 
         log.info("MetadataImportPerImage step plugin initialized");
@@ -217,11 +217,11 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         int physPageCount = (physRoot != null && physRoot.getAllChildren() != null) ? physRoot.getAllChildren().size() : 0;
 
         // Validate Excel data
-        ValidationResult dataValidation = validateExcelData(parseResult.rows, prefs, images.size(), physPageCount,
-                parseResult.sheetCount);
+        ValidationResult dataValidation = validateExcelData(parseResult.rows(), prefs, images.size(), physPageCount,
+                parseResult.sheetCount());
 
         // Merge parse warnings into data validation warnings
-        for (String warning : parseResult.parseWarnings) {
+        for (String warning : parseResult.parseWarnings()) {
             dataValidation.addWarning(warning);
         }
 
@@ -251,7 +251,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
         // Build logical structure from Excel data
         try {
-            buildStructure(fileformat, prefs, parseResult.rows);
+            buildStructure(fileformat, prefs, parseResult.rows());
         } catch (Exception e) {
             return reportError(process, "Failed to build metadata structure: " + e.getMessage());
         }
@@ -658,7 +658,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         if (root != null && root.getType().isAnchor()) {
             List<DocStruct> children = root.getAllChildren();
             if (children != null && !children.isEmpty()) {
-                return children.get(0);
+                return children.getFirst();
             }
             throw new IllegalStateException("Anchor document has no child volumes");
         }
@@ -697,10 +697,17 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     static class HierarchyLevel {
-        String structType;
-        String groupByColumn;
-        String metadataField;
-        String fallbackTitle;
+        final String structType;
+        final String groupByColumn;
+        final String metadataField;
+        final String fallbackTitle;
+
+        HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle) {
+            this.structType = structType;
+            this.groupByColumn = groupByColumn;
+            this.metadataField = metadataField;
+            this.fallbackTitle = fallbackTitle;
+        }
     }
 
     static class ValidationResult {
@@ -720,15 +727,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         }
     }
 
-    static class ParseResult {
-        final List<Map<String, String>> rows;
-        final int sheetCount;
-        final List<String> parseWarnings;
-
-        ParseResult(List<Map<String, String>> rows, int sheetCount, List<String> parseWarnings) {
-            this.rows = rows;
-            this.sheetCount = sheetCount;
-            this.parseWarnings = parseWarnings;
-        }
+    record ParseResult(List<Map<String, String>> rows, int sheetCount, List<String> parseWarnings) {
     }
 }
