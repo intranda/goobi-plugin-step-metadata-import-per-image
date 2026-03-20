@@ -292,12 +292,12 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         }
 
         for (HierarchyLevel level : hierarchyLevels) {
-            if (prefs.getDocStrctTypeByName(level.structType) == null) {
-                result.addError("Struct type not found in ruleset: " + level.structType);
+            if (prefs.getDocStrctTypeByName(level.structType()) == null) {
+                result.addError("Struct type not found in ruleset: " + level.structType());
             }
-            if (StringUtils.isNotBlank(level.metadataField)
-                    && prefs.getMetadataTypeByName(level.metadataField) == null) {
-                result.addError("Metadata field not found in ruleset: " + level.metadataField);
+            if (StringUtils.isNotBlank(level.metadataField())
+                    && prefs.getMetadataTypeByName(level.metadataField()) == null) {
+                result.addError("Metadata field not found in ruleset: " + level.metadataField());
             }
         }
 
@@ -335,15 +335,15 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
         // Check missing grouping columns
         for (HierarchyLevel level : hierarchyLevels) {
-            if (StringUtils.isNotBlank(level.groupByColumn) && !rows.get(0).containsKey(level.groupByColumn)) {
-                result.addError("Missing column in Excel: " + level.groupByColumn);
+            if (StringUtils.isNotBlank(level.groupByColumn()) && !rows.get(0).containsKey(level.groupByColumn())) {
+                result.addError("Missing column in Excel: " + level.groupByColumn());
             }
         }
 
         // Collect hierarchy levels that have a non-blank groupByColumn
         List<HierarchyLevel> groupingLevels = new ArrayList<>();
         for (HierarchyLevel level : hierarchyLevels) {
-            if (StringUtils.isNotBlank(level.groupByColumn)) {
+            if (StringUtils.isNotBlank(level.groupByColumn())) {
                 groupingLevels.add(level);
             }
         }
@@ -353,8 +353,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         Map<String, Set<String>> seenValues = new HashMap<>();
         Map<String, String> lastValues = new HashMap<>();
         for (HierarchyLevel level : groupingLevels) {
-            seenValues.put(level.groupByColumn, new HashSet<>());
-            lastValues.put(level.groupByColumn, null);
+            seenValues.put(level.groupByColumn(), new HashSet<>());
+            lastValues.put(level.groupByColumn(), null);
         }
 
         for (int rowIdx = 0; rowIdx < rows.size(); rowIdx++) {
@@ -363,9 +363,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
             // Check 3: empty groupByColumn value with no fallback
             for (HierarchyLevel level : groupingLevels) {
-                String value = row.getOrDefault(level.groupByColumn, "").trim();
-                if (value.isEmpty() && StringUtils.isBlank(level.fallbackTitle)) {
-                    result.addError("Row " + excelRowNumber + ": empty value in column '" + level.groupByColumn
+                String value = row.getOrDefault(level.groupByColumn(), "").trim();
+                if (value.isEmpty() && StringUtils.isBlank(level.fallbackTitle())) {
+                    result.addError("Row " + excelRowNumber + ": empty value in column '" + level.groupByColumn()
                             + "' with no fallback configured");
                 }
             }
@@ -374,7 +374,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             if (!groupingLevels.isEmpty()) {
                 boolean allEmpty = true;
                 for (HierarchyLevel level : groupingLevels) {
-                    String value = row.getOrDefault(level.groupByColumn, "").trim();
+                    String value = row.getOrDefault(level.groupByColumn(), "").trim();
                     if (!value.isEmpty()) {
                         allEmpty = false;
                         break;
@@ -395,16 +395,16 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
             // Check 7: non-contiguous duplicate keys
             for (HierarchyLevel level : groupingLevels) {
-                String value = row.getOrDefault(level.groupByColumn, "").trim();
+                String value = row.getOrDefault(level.groupByColumn(), "").trim();
                 if (!value.isEmpty()) {
-                    Set<String> seen = seenValues.get(level.groupByColumn);
-                    String lastValue = lastValues.get(level.groupByColumn);
+                    Set<String> seen = seenValues.get(level.groupByColumn());
+                    String lastValue = lastValues.get(level.groupByColumn());
                     if (seen.contains(value) && !value.equals(lastValue)) {
-                        result.addWarning("Non-contiguous values in column '" + level.groupByColumn
+                        result.addWarning("Non-contiguous values in column '" + level.groupByColumn()
                                 + "': value '" + value + "' reappears at row " + excelRowNumber);
                     }
                     seen.add(value);
-                    lastValues.put(level.groupByColumn, value);
+                    lastValues.put(level.groupByColumn(), value);
                 }
             }
         }
@@ -612,9 +612,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 String key = getKey(row, lvl);
                 HierarchyLevel levelConfig = hierarchyLevels.get(lvl);
 
-                DocStructType structType = prefs.getDocStrctTypeByName(levelConfig.structType);
+                DocStructType structType = prefs.getDocStrctTypeByName(levelConfig.structType());
                 if (structType == null) {
-                    throw new IllegalStateException("DocStruct type not found in ruleset: " + levelConfig.structType);
+                    throw new IllegalStateException("DocStruct type not found in ruleset: " + levelConfig.structType());
                 }
                 DocStruct newStruct = document.createDocStruct(structType);
 
@@ -624,16 +624,16 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     currentStructs[lvl - 1].addChild(newStruct);
                 }
 
-                if (StringUtils.isNotBlank(levelConfig.metadataField)) {
-                    MetadataType mdType = prefs.getMetadataTypeByName(levelConfig.metadataField);
+                if (StringUtils.isNotBlank(levelConfig.metadataField())) {
+                    MetadataType mdType = prefs.getMetadataTypeByName(levelConfig.metadataField());
                     if (mdType != null) {
                         Metadata md = new Metadata(mdType);
                         md.setValue(key);
                         try {
                             newStruct.addMetadata(md);
                         } catch (MetadataTypeNotAllowedException e) {
-                            log.warn("Cannot add metadata '{}' to '{}': {}", levelConfig.metadataField,
-                                    levelConfig.structType, e.getMessage());
+                            log.warn("Cannot add metadata '{}' to '{}': {}", levelConfig.metadataField(),
+                                    levelConfig.structType(), e.getMessage());
                         }
                     }
                 }
@@ -692,25 +692,14 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
      */
     private String getKey(Map<String, String> row, int levelIndex) {
         HierarchyLevel levelConfig = hierarchyLevels.get(levelIndex);
-        String value = row.getOrDefault(levelConfig.groupByColumn, "").trim();
-        if (value.isEmpty() && StringUtils.isNotBlank(levelConfig.fallbackTitle)) {
-            value = levelConfig.fallbackTitle;
+        String value = row.getOrDefault(levelConfig.groupByColumn(), "").trim();
+        if (value.isEmpty() && StringUtils.isNotBlank(levelConfig.fallbackTitle())) {
+            value = levelConfig.fallbackTitle();
         }
         return value;
     }
 
-    static class HierarchyLevel {
-        final String structType;
-        final String groupByColumn;
-        final String metadataField;
-        final String fallbackTitle;
-
-        HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle) {
-            this.structType = structType;
-            this.groupByColumn = groupByColumn;
-            this.metadataField = metadataField;
-            this.fallbackTitle = fallbackTitle;
-        }
+    record HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle) {
     }
 
     static class ValidationResult {
