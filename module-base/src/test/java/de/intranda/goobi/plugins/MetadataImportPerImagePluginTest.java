@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.FormulaError;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -116,6 +118,39 @@ public class MetadataImportPerImagePluginTest {
         assertEquals("caption1", rows.get(0).get("Caption"));
         // Row with empty structure
         assertEquals("", rows.get(8).get("Structure"));
+    }
+
+    @Test
+    public void testParseExcelWithFormulaErrorCell() throws Exception {
+        File excelFile = folder.newFile("error.xlsx");
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Data");
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("URI");
+            header.createCell(1).setCellValue("Structure");
+            header.createCell(2).setCellValue("Label");
+            header.createCell(3).setCellValue("Caption");
+
+            Row dataRow = sheet.createRow(1);
+            dataRow.createCell(0).setCellValue("uri1");
+            // Cell with an explicit error value
+            dataRow.createCell(1).setCellErrorValue(FormulaError.DIV0.getCode());
+            dataRow.createCell(2).setCellValue("p1");
+            dataRow.createCell(3).setCellValue("caption1");
+
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(excelFile)) {
+                workbook.write(fos);
+            }
+        }
+
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+
+        List<Map<String, String>> rows = plugin.parseExcel(excelFile.getAbsolutePath());
+        assertEquals(1, rows.size());
+        // Error cell should produce an empty string
+        assertEquals("", rows.get(0).get("Structure"));
+        assertEquals("uri1", rows.get(0).get("URI"));
     }
 
     @Test
