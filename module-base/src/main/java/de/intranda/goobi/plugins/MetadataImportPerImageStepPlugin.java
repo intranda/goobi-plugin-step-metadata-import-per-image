@@ -536,8 +536,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     /**
      * Rebuilds the logical structure of the metadata document based on the Excel rows.
      * Removes all existing children of the content root, then creates new hierarchy
-     * elements according to the configured levels. Sets ORDERLABEL on physical pages
-     * from the label column. Links each page to its containing logical elements.
+     * elements according to the configured levels. Sets pagination labels on physical
+     * pages from the label column. Links each page to its containing logical elements.
      */
     void buildStructure(Fileformat fileformat, Prefs prefs, List<Map<String, String>> rows)
             throws TypeNotAllowedAsChildException, MetadataTypeNotAllowedException,
@@ -546,11 +546,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         DocStruct contentRoot = getContentRoot(document);
         if (contentRoot == null) {
             throw new IllegalStateException("No content root found in logical structure");
-        }
-
-        final MetadataType logicalPageNumberType = prefs.getMetadataTypeByName(paginationLabelMetadata);
-        if (logicalPageNumberType == null) {
-            log.warn("Metadata type '{}' not found in ruleset; skipping pagination labels", paginationLabelMetadata);
         }
 
         // Remove existing children of content root (clean up references first)
@@ -579,6 +574,14 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     + ") for " + rows.size() + " data rows");
         }
 
+        // Set pagination labels on physical pages
+        MetadataType logicalPageNumberType = prefs.getMetadataTypeByName(paginationLabelMetadata);
+        if (logicalPageNumberType != null) {
+            setPaginationLabels(rows, physicalPages, logicalPageNumberType);
+        } else {
+            log.warn("Metadata type '{}' not found in ruleset; skipping pagination labels", paginationLabelMetadata);
+        }
+
         int numLevels = hierarchyLevels.size();
         String[] currentKeys = new String[numLevels];
         DocStruct[] currentStructs = new DocStruct[numLevels];
@@ -586,19 +589,6 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         for (int rowIdx = 0; rowIdx < rows.size(); rowIdx++) {
             Map<String, String> row = rows.get(rowIdx);
             DocStruct page = physicalPages.get(rowIdx);
-
-            // Set pagination label on physical page
-            String label = row.getOrDefault(columnLabel, "");
-            if (logicalPageNumberType != null) {
-                List<? extends Metadata> pageLabelMetadata = page.getAllMetadataByType(logicalPageNumberType);
-                if (!pageLabelMetadata.isEmpty()) {
-                    pageLabelMetadata.getFirst().setValue(label);
-                } else if (!label.isEmpty()) {
-                    Metadata pageLabel = new Metadata(logicalPageNumberType);
-                    pageLabel.setValue(label);
-                    page.addMetadata(pageLabel);
-                }
-            }
 
             // Find which level changed first (null currentKeys[lvl] triggers change)
             int changedAt = numLevels;
@@ -651,6 +641,26 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 if (currentStructs[lvl] != null) {
                     currentStructs[lvl].addReferenceTo(page, "logical_physical");
                 }
+            }
+        }
+    }
+
+    /**
+     * Sets pagination labels on physical pages from the label column of the Excel rows.
+     * Updates existing metadata values or creates new ones as needed.
+     */
+    private void setPaginationLabels(List<Map<String, String>> rows, List<DocStruct> physicalPages,
+            MetadataType labelType) throws MetadataTypeNotAllowedException {
+        for (int i = 0; i < rows.size(); i++) {
+            String label = rows.get(i).getOrDefault(columnLabel, "");
+            DocStruct page = physicalPages.get(i);
+            List<? extends Metadata> existing = page.getAllMetadataByType(labelType);
+            if (!existing.isEmpty()) {
+                existing.getFirst().setValue(label);
+            } else if (!label.isEmpty()) {
+                Metadata pageLabel = new Metadata(labelType);
+                pageLabel.setValue(label);
+                page.addMetadata(pageLabel);
             }
         }
     }
