@@ -1,8 +1,10 @@
 package de.intranda.goobi.plugins;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -400,7 +402,7 @@ public class MetadataImportPerImagePluginTest {
         rows.add(row);
 
         // imageCount=5 != rows.size()=1, physPageCount=3 != rows.size()=1, missing column "MissingColumn"
-        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 5, 3);
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 5, 3, 1);
 
         assertTrue("Expected multiple errors", result.errors.size() >= 2);
     }
@@ -441,6 +443,223 @@ public class MetadataImportPerImagePluginTest {
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the field name",
                 result.errors.stream().anyMatch(e -> e.contains("NonExistentField")));
+    }
+
+    @Test
+    public void testValidateLabelColumnMissing() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "MissingLabelColumn";
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        // Row without the expected label column
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> row = new HashMap<>();
+        row.put("URI", "uri1");
+        rows.add(row);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 1);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention the missing label column",
+                result.errors.stream().anyMatch(e -> e.contains("MissingLabelColumn")));
+    }
+
+    @Test
+    public void testParseDuplicateColumnHeaders() throws Exception {
+        File excelFile = folder.newFile("duplicate_headers.xlsx");
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Data");
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("URI");
+            header.createCell(1).setCellValue("Structure");
+            header.createCell(2).setCellValue("URI"); // duplicate
+            header.createCell(3).setCellValue("Label");
+
+            Row dataRow = sheet.createRow(1);
+            dataRow.createCell(0).setCellValue("uri1");
+            dataRow.createCell(1).setCellValue("folder1");
+            dataRow.createCell(2).setCellValue("uri_dup");
+            dataRow.createCell(3).setCellValue("p1");
+
+            try (FileOutputStream fos = new FileOutputStream(excelFile)) {
+                workbook.write(fos);
+            }
+        }
+
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+
+        try {
+            plugin.parseExcel(excelFile.getAbsolutePath());
+            fail("Expected IOException for duplicate column headers");
+        } catch (IOException e) {
+            assertTrue("Exception message should mention the duplicate header",
+                    e.getMessage().contains("Duplicate column header: URI"));
+        }
+    }
+
+    @Test
+    public void testValidateEmptyGroupByWithoutFallback() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level.structType = "Chapter";
+        level.groupByColumn = "URI";
+        level.metadataField = "TitleDocMain";
+        level.fallbackTitle = ""; // no fallback
+        plugin.hierarchyLevels.add(level);
+
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> row1 = new HashMap<>();
+        row1.put("URI", "uri1");
+        row1.put("Label", "p1");
+        rows.add(row1);
+        Map<String, String> row2 = new HashMap<>();
+        row2.put("URI", ""); // empty value, no fallback
+        row2.put("Label", "p2");
+        rows.add(row2);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 2, 2, 1);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention the row and column",
+                result.errors.stream().anyMatch(e -> e.contains("Row 3") && e.contains("URI")));
+    }
+
+    @Test
+    public void testValidateEmptyExcel() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        List<Map<String, String>> rows = new ArrayList<>(); // empty
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 0, 0, 1);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention no data rows",
+                result.errors.stream().anyMatch(e -> e.contains("no data rows")));
+    }
+
+    @Test
+    public void testValidateXmlInvalidChars() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> row = new HashMap<>();
+        row.put("Label", "p1");
+        row.put("URI", "uri\u0003value"); // contains control char 0x03
+        rows.add(row);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 1);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention XML control characters",
+                result.errors.stream().anyMatch(e -> e.contains("invalid XML control characters")));
+    }
+
+    @Test
+    public void testValidateAllGroupColumnsEmpty() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level1 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level1.structType = "Chapter";
+        level1.groupByColumn = "URI";
+        level1.metadataField = "TitleDocMain";
+        level1.fallbackTitle = "Fallback1";
+        plugin.hierarchyLevels.add(level1);
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level2 = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level2.structType = "Chapter";
+        level2.groupByColumn = "Structure";
+        level2.metadataField = "TitleDocMain";
+        level2.fallbackTitle = "Fallback2";
+        plugin.hierarchyLevels.add(level2);
+
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> row = new HashMap<>();
+        row.put("URI", "");
+        row.put("Structure", "");
+        row.put("Label", "p1");
+        rows.add(row);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 1);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention all grouping columns empty",
+                result.errors.stream().anyMatch(e -> e.contains("all grouping columns are empty")));
+    }
+
+    @Test
+    public void testValidateNonContiguousDuplicateKeysWarning() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        MetadataImportPerImageStepPlugin.HierarchyLevel level = new MetadataImportPerImageStepPlugin.HierarchyLevel();
+        level.structType = "Chapter";
+        level.groupByColumn = "URI";
+        level.metadataField = "TitleDocMain";
+        level.fallbackTitle = "";
+        plugin.hierarchyLevels.add(level);
+
+        // Pattern: A, B, A — non-contiguous
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> row1 = new HashMap<>();
+        row1.put("URI", "A");
+        row1.put("Label", "p1");
+        rows.add(row1);
+        Map<String, String> row2 = new HashMap<>();
+        row2.put("URI", "B");
+        row2.put("Label", "p2");
+        rows.add(row2);
+        Map<String, String> row3 = new HashMap<>();
+        row3.put("URI", "A");
+        row3.put("Label", "p3");
+        rows.add(row3);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 3, 3, 1);
+
+        assertFalse("Should not have errors", result.hasErrors());
+        assertFalse("Should have warnings", result.warnings.isEmpty());
+        assertTrue("Warning should mention non-contiguous values",
+                result.warnings.stream().anyMatch(w -> w.contains("Non-contiguous") && w.contains("A")));
+    }
+
+    @Test
+    public void testValidateMultipleSheetsWarning() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> row = new HashMap<>();
+        row.put("Label", "p1");
+        rows.add(row);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, prefs, 1, 1, 3);
+
+        assertFalse("Should not have errors", result.hasErrors());
+        assertFalse("Should have warnings", result.warnings.isEmpty());
+        assertTrue("Warning should mention multiple sheets",
+                result.warnings.stream().anyMatch(w -> w.contains("3 sheets")));
+    }
+
+    @Test
+    public void testValidateConfigNoHierarchyLevels() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>(); // empty
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention no hierarchy levels",
+                result.errors.stream().anyMatch(e -> e.contains("No hierarchy levels configured")));
     }
 
     @Before

@@ -25,8 +25,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.configuration.HierarchicalConfiguration;
@@ -214,7 +217,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         int physPageCount = (physRoot != null && physRoot.getAllChildren() != null) ? physRoot.getAllChildren().size() : 0;
 
         // Validate Excel data
-        ValidationResult dataValidation = validateExcelData(parseResult.rows, prefs, images.size(), physPageCount);
+        ValidationResult dataValidation = validateExcelData(parseResult.rows, prefs, images.size(), physPageCount,
+                parseResult.sheetCount);
 
         // Merge parse warnings into data validation warnings
         for (String warning : parseResult.parseWarnings) {
@@ -300,8 +304,15 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
      * Validates the parsed Excel data against expected constraints.
      * Collects all errors and warnings rather than failing on the first problem.
      */
-    ValidationResult validateExcelData(List<Map<String, String>> rows, Prefs prefs, int imageCount, int physPageCount) {
+    ValidationResult validateExcelData(List<Map<String, String>> rows, Prefs prefs, int imageCount, int physPageCount,
+            int sheetCount) {
         ValidationResult result = new ValidationResult();
+
+        // Check 4: empty Excel (0 data rows)
+        if (rows.isEmpty()) {
+            result.addError("Excel file contains no data rows");
+            return result;
+        }
 
         if (rows.size() != imageCount) {
             result.addError("Row count mismatch: Excel has " + rows.size()
@@ -313,15 +324,110 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     + " data rows, metadata has " + physPageCount + " physical pages");
         }
 
-        if (!rows.isEmpty()) {
-            for (HierarchyLevel level : hierarchyLevels) {
-                if (StringUtils.isNotBlank(level.groupByColumn) && !rows.get(0).containsKey(level.groupByColumn)) {
-                    result.addError("Missing column in Excel: " + level.groupByColumn);
+        // Check 1: label column header missing
+        if (!rows.get(0).containsKey(columnLabel)) {
+            result.addError("Label column '" + columnLabel + "' not found in Excel headers");
+        }
+
+        // Check missing grouping columns
+        for (HierarchyLevel level : hierarchyLevels) {
+            if (StringUtils.isNotBlank(level.groupByColumn) && !rows.get(0).containsKey(level.groupByColumn)) {
+                result.addError("Missing column in Excel: " + level.groupByColumn);
+            }
+        }
+
+        // Collect hierarchy levels that have a non-blank groupByColumn
+        List<HierarchyLevel> groupingLevels = new ArrayList<>();
+        for (HierarchyLevel level : hierarchyLevels) {
+            if (StringUtils.isNotBlank(level.groupByColumn)) {
+                groupingLevels.add(level);
+            }
+        }
+
+        // Per-row checks
+        // Track values seen and last value per groupByColumn for non-contiguous detection (check 7)
+        Map<String, Set<String>> seenValues = new HashMap<>();
+        Map<String, String> lastValues = new HashMap<>();
+        for (HierarchyLevel level : groupingLevels) {
+            seenValues.put(level.groupByColumn, new HashSet<>());
+            lastValues.put(level.groupByColumn, null);
+        }
+
+        for (int rowIdx = 0; rowIdx < rows.size(); rowIdx++) {
+            Map<String, String> row = rows.get(rowIdx);
+            int excelRowNumber = rowIdx + 2; // 1-based, accounting for header
+
+            // Check 3: empty groupByColumn value with no fallback
+            for (HierarchyLevel level : groupingLevels) {
+                String value = row.getOrDefault(level.groupByColumn, "").trim();
+                if (value.isEmpty() && StringUtils.isBlank(level.fallbackTitle)) {
+                    result.addError("Row " + excelRowNumber + ": empty value in column '" + level.groupByColumn
+                            + "' with no fallback configured");
+                }
+            }
+
+            // Check 6: all grouping columns empty
+            if (!groupingLevels.isEmpty()) {
+                boolean allEmpty = true;
+                for (HierarchyLevel level : groupingLevels) {
+                    String value = row.getOrDefault(level.groupByColumn, "").trim();
+                    if (!value.isEmpty()) {
+                        allEmpty = false;
+                        break;
+                    }
+                }
+                if (allEmpty) {
+                    result.addError("Row " + excelRowNumber + ": all grouping columns are empty");
+                }
+            }
+
+            // Check 5: XML-invalid control characters in any cell
+            for (Map.Entry<String, String> entry : row.entrySet()) {
+                if (containsInvalidXmlChars(entry.getValue())) {
+                    result.addError("Row " + excelRowNumber + ", column '" + entry.getKey()
+                            + "': contains invalid XML control characters");
+                }
+            }
+
+            // Check 7: non-contiguous duplicate keys
+            for (HierarchyLevel level : groupingLevels) {
+                String value = row.getOrDefault(level.groupByColumn, "").trim();
+                if (!value.isEmpty()) {
+                    Set<String> seen = seenValues.get(level.groupByColumn);
+                    String lastValue = lastValues.get(level.groupByColumn);
+                    if (seen.contains(value) && !value.equals(lastValue)) {
+                        result.addWarning("Non-contiguous values in column '" + level.groupByColumn
+                                + "': value '" + value + "' reappears at row " + excelRowNumber);
+                    }
+                    seen.add(value);
+                    lastValues.put(level.groupByColumn, value);
                 }
             }
         }
 
+        // Check 8: multiple sheets
+        if (sheetCount > 1) {
+            result.addWarning("Workbook contains " + sheetCount + " sheets; only the first sheet is processed");
+        }
+
         return result;
+    }
+
+    /**
+     * Checks whether a string contains XML-invalid control characters
+     * (characters below 0x20 except tab, newline, and carriage return).
+     */
+    private static boolean containsInvalidXmlChars(String value) {
+        if (value == null) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -342,13 +448,16 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 throw new IOException("Excel file has no header row: " + filePath);
             }
 
-            // Map column header to column index
-            Map<String, Integer> columnIndex = new HashMap<>();
+            // Map column header to column index, detecting duplicates
+            Map<String, Integer> columnIndex = new LinkedHashMap<>();
             for (int c = 0; c < headerRow.getLastCellNum(); c++) {
                 Cell cell = headerRow.getCell(c);
                 if (cell != null) {
                     String header = getCellValue(cell).trim();
                     if (!header.isEmpty()) {
+                        if (columnIndex.containsKey(header)) {
+                            throw new IOException("Duplicate column header: " + header);
+                        }
                         columnIndex.put(header, c);
                     }
                 }
