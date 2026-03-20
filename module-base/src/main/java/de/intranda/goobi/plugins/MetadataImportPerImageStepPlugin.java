@@ -172,10 +172,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         // Validate configuration against ruleset
         ValidationResult configValidation = validateConfig(prefs);
         if (configValidation.hasErrors()) {
-            for (String error : configValidation.errors) {
-                Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, error);
-            }
-            return reportError(process, String.join("; ", configValidation.errors));
+            return reportValidationErrors(process, configValidation);
         }
 
         // Ensure pagination structures exist (idempotent — safe to call even when pages already exist)
@@ -226,10 +223,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         }
 
         if (dataValidation.hasErrors()) {
-            for (String error : dataValidation.errors) {
-                Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, error);
-            }
-            return reportError(process, String.join("; ", dataValidation.errors));
+            return reportValidationErrors(process, dataValidation);
         }
 
         // Log warnings to journal but continue processing
@@ -271,6 +265,16 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         log.error(message);
         Helper.setFehlerMeldungUntranslated(message);
         Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, message);
+        return PluginReturnValue.ERROR;
+    }
+
+    private PluginReturnValue reportValidationErrors(Process process, ValidationResult result) {
+        for (String error : result.errors) {
+            Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, error);
+        }
+        String combined = String.join("; ", result.errors);
+        log.error(combined);
+        Helper.setFehlerMeldungUntranslated(combined);
         return PluginReturnValue.ERROR;
     }
 
