@@ -503,11 +503,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             return "";
         }
         if (type == CellType.NUMERIC) {
-            double d = cell.getNumericCellValue();
-            if (d == Math.floor(d) && !Double.isInfinite(d)) {
-                return String.valueOf((long) d);
-            }
-            return String.valueOf(d);
+            return formatNumericValue(cell.getNumericCellValue());
         }
         if (type == CellType.BOOLEAN) {
             return String.valueOf(cell.getBooleanCellValue());
@@ -520,15 +516,18 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             try {
                 return cell.getStringCellValue();
             } catch (IllegalStateException e) {
-                double d = cell.getNumericCellValue();
-                if (d == Math.floor(d) && !Double.isInfinite(d)) {
-                    return String.valueOf((long) d);
-                }
-                return String.valueOf(d);
+                return formatNumericValue(cell.getNumericCellValue());
             }
         }
         String val = cell.getStringCellValue();
         return val != null ? val : "";
+    }
+
+    private static String formatNumericValue(double d) {
+        if (d == Math.floor(d) && !Double.isInfinite(d)) {
+            return String.valueOf((long) d);
+        }
+        return String.valueOf(d);
     }
 
     /**
