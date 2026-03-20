@@ -426,7 +426,7 @@ public class MetadataImportPerImagePluginTest {
         // imageCount=5 != rows.size()=1, physPageCount=3 != rows.size()=1, missing column "MissingColumn"
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 5, 3, 1);
 
-        assertTrue("Expected multiple errors", result.errors.size() >= 2);
+        assertTrue("Expected multiple errors", result.getErrors().size() >= 2);
     }
 
     @Test
@@ -441,7 +441,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the type name",
-                result.errors.stream().anyMatch(e -> e.contains("NonExistentType")));
+                result.getErrors().stream().anyMatch(e -> e.contains("NonExistentType")));
     }
 
     @Test
@@ -456,7 +456,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the field name",
-                result.errors.stream().anyMatch(e -> e.contains("NonExistentField")));
+                result.getErrors().stream().anyMatch(e -> e.contains("NonExistentField")));
     }
 
     @Test
@@ -475,7 +475,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the missing label column",
-                result.errors.stream().anyMatch(e -> e.contains("MissingLabelColumn")));
+                result.getErrors().stream().anyMatch(e -> e.contains("MissingLabelColumn")));
     }
 
     @Test
@@ -534,7 +534,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the row and column",
-                result.errors.stream().anyMatch(e -> e.contains("Row 3") && e.contains("URI")));
+                result.getErrors().stream().anyMatch(e -> e.contains("Row 3") && e.contains("URI")));
     }
 
     @Test
@@ -549,7 +549,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention no data rows",
-                result.errors.stream().anyMatch(e -> e.contains("no data rows")));
+                result.getErrors().stream().anyMatch(e -> e.contains("no data rows")));
     }
 
     @Test
@@ -568,7 +568,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention XML control characters",
-                result.errors.stream().anyMatch(e -> e.contains("invalid XML control characters")));
+                result.getErrors().stream().anyMatch(e -> e.contains("invalid XML control characters")));
     }
 
     @Test
@@ -593,7 +593,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention all grouping columns empty",
-                result.errors.stream().anyMatch(e -> e.contains("all grouping columns are empty")));
+                result.getErrors().stream().anyMatch(e -> e.contains("all grouping columns are empty")));
     }
 
     @Test
@@ -623,9 +623,9 @@ public class MetadataImportPerImagePluginTest {
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 3, 3, 1);
 
         assertFalse("Should not have errors", result.hasErrors());
-        assertFalse("Should have warnings", result.warnings.isEmpty());
+        assertFalse("Should have warnings", result.getWarnings().isEmpty());
         assertTrue("Warning should mention non-contiguous values",
-                result.warnings.stream().anyMatch(w -> w.contains("Non-contiguous") && w.contains("A")));
+                result.getWarnings().stream().anyMatch(w -> w.contains("Non-contiguous") && w.contains("A")));
     }
 
     @Test
@@ -642,9 +642,9 @@ public class MetadataImportPerImagePluginTest {
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 3);
 
         assertFalse("Should not have errors", result.hasErrors());
-        assertFalse("Should have warnings", result.warnings.isEmpty());
+        assertFalse("Should have warnings", result.getWarnings().isEmpty());
         assertTrue("Warning should mention multiple sheets",
-                result.warnings.stream().anyMatch(w -> w.contains("3 sheets")));
+                result.getWarnings().stream().anyMatch(w -> w.contains("3 sheets")));
     }
 
     @Test
@@ -656,7 +656,7 @@ public class MetadataImportPerImagePluginTest {
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention no hierarchy levels",
-                result.errors.stream().anyMatch(e -> e.contains("No hierarchy levels configured")));
+                result.getErrors().stream().anyMatch(e -> e.contains("No hierarchy levels configured")));
     }
 
     @Before

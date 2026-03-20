@@ -225,7 +225,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         }
 
         // Log warnings to journal but continue processing
-        for (String warning : dataValidation.warnings) {
+        for (String warning : dataValidation.getWarnings()) {
             log.warn(warning);
             Helper.addMessageToProcessJournal(process.getId(), LogType.WARN, warning);
         }
@@ -267,10 +267,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     private PluginReturnValue reportValidationErrors(Process process, ValidationResult result) {
-        for (String error : result.errors) {
+        for (String error : result.getErrors()) {
             Helper.addMessageToProcessJournal(process.getId(), LogType.ERROR, error);
         }
-        String combined = String.join("; ", result.errors);
+        String combined = String.join("; ", result.getErrors());
         log.error(combined);
         Helper.setFehlerMeldungUntranslated(combined);
         return PluginReturnValue.ERROR;
@@ -703,8 +703,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     static class ValidationResult {
-        final List<String> errors = new ArrayList<>();
-        final List<String> warnings = new ArrayList<>();
+        private final List<String> errors = new ArrayList<>();
+        private final List<String> warnings = new ArrayList<>();
 
         void addError(String msg) {
             errors.add(msg);
@@ -716,6 +716,14 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
         boolean hasErrors() {
             return !errors.isEmpty();
+        }
+
+        List<String> getErrors() {
+            return errors;
+        }
+
+        List<String> getWarnings() {
+            return warnings;
         }
     }
 
