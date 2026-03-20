@@ -750,6 +750,7 @@ public class MetadataImportPerImagePluginTest {
         try {
             createProcessDirectory(processDirectory);
         } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
         }
 
         return process;
