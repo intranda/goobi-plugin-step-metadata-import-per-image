@@ -49,8 +49,67 @@ pipeline {
           }
         }
       }
-      steps {
-        sh 'mvn clean verify -U -P release-build'
+      parallel {
+
+        stage('test') {
+          agent {
+            docker {
+              image mavenDockerImage
+              args mavenDockerArgs
+              reuseNode true
+            }
+          }
+          steps {
+            script {
+              def strict = env.BRANCH_NAME == 'master'
+              def cmd = "mvn test -Dmaven.main.skip=true -Drevision=\$BUILD_VERSION -P '!local-development' --no-transfer-progress"
+              if (strict) {
+                sh cmd
+              } else {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                  sh cmd
+                }
+              }
+            }
+            junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+            step([
+                    $class           : 'JacocoPublisher',
+                    execPattern      : '**/target/jacoco.exec',
+                    classPattern     : '**/target/classes/',
+                    sourcePattern    : '**/src/main/java',
+                    exclusionPattern : '**/*Test.class'
+            ])
+          }
+        }
+
+        stage('checkstyle') {
+          agent {
+            docker {
+              image mavenDockerImage
+              args mavenDockerArgs
+              reuseNode true
+            }
+          }
+          steps {
+            script {
+              def strict = (env.BRANCH_NAME == 'master') && !env.NO_STRICT_CHECKSTYLE
+              def cmd = "mvn checkstyle:check -Drevision=\$BUILD_VERSION -P '!local-development' --no-transfer-progress"
+              if (strict) {
+                sh cmd
+              } else {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                  sh cmd
+                }
+              }
+            }
+            recordIssues(
+                    id: 'checkstyle-plugin',
+                    tools: [checkStyle(pattern: '**/target/checkstyle-result.xml')],
+                    qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]]
+            )
+          }
+        }
+
       }
     }
     stage('build-sonar') {
@@ -98,8 +157,11 @@ pipeline {
       steps {
         script {
           if (fileExists('module-lib/pom.xml')) {
-            sh 'mvn -N deploy'
-            sh 'mvn -f module-lib/pom.xml deploy'
+            def altRepo = fileExists('DO_NOT_PUBLISH')
+                    ? "-DaltDeploymentRepository=\$NEXUS_INTERNAL_REPO -DaltSnapshotDeploymentRepository=\$NEXUS_INTERNAL_REPO"
+                    : ''
+            sh "mvn -N deploy -Dmaven.main.skip=true -Dmaven.test.skip=true -Drevision=\$BUILD_VERSION -U ${altRepo} --no-transfer-progress"
+            sh "mvn -f module-lib/pom.xml deploy -Dmaven.main.skip=true -Dmaven.test.skip=true -Drevision=\$BUILD_VERSION -U ${altRepo} --no-transfer-progress"
           }
         }
       }
@@ -109,6 +171,13 @@ pipeline {
         anyOf {
           branch 'master'
           branch 'hotfix_release_*'
+        }
+      }
+      agent {
+        docker {
+          image mavenDockerImage
+          args mavenDockerArgs
+          reuseNode true
         }
       }
       steps {
@@ -152,10 +221,10 @@ pipeline {
     }
     changed {
       emailext(
-        subject: '${DEFAULT_SUBJECT}',
-        body: '${DEFAULT_CONTENT}',
-        recipientProviders: [requestor(),culprits()],
-        attachLog: true
+              subject: '${DEFAULT_SUBJECT}',
+              body: '${DEFAULT_CONTENT}',
+              recipientProviders: [requestor(), culprits()],
+              attachLog: true
       )
     }
   }
