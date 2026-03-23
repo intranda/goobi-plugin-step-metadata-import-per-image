@@ -26,9 +26,9 @@
             Volume (root) > Chapter (ArchivalObject) > Chapter (Folder) > Figure (Item)
         -->
         <hierarchy>
-            <level structType="Chapter" groupByColumn="URI" metadataField="TitleDocMain"/>
-            <level structType="Chapter" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
-            <level structType="Figure" groupByColumn="Caption" metadataField="TitleDocMain"/>
+            <level structType="Chapter" groupByColumn="URI" metadataField="TitleDocMain" matchMetadata="TitleDocMain"/>
+            <level structType="Chapter" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder" matchMetadata="TitleDocMain"/>
+            <level structType="Figure" groupByColumn="Caption" metadataField="TitleDocMain" matchMetadata="TitleDocMain"/>
         </hierarchy>
     </config>
 

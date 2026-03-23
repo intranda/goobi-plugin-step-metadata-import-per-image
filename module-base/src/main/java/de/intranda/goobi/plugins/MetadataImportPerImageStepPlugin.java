@@ -89,6 +89,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     String columnLabel;
     String paginationLabelMetadata = "logicalPageNumber";
     List<HierarchyLevel> hierarchyLevels;
+    List<String> buildWarnings;
 
     @Override
     public void initialize(Step step, String returnPath) {
@@ -249,6 +250,12 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             buildStructure(fileformat, prefs, parseResult.rows());
         } catch (Exception e) {
             return reportError(process, "Failed to build metadata structure: " + e.getMessage());
+        }
+
+        // Log build warnings to journal
+        for (String warning : buildWarnings) {
+            log.warn(warning);
+            Helper.addMessageToProcessJournal(process.getId(), LogType.WARN, warning);
         }
 
         // Write updated metadata file
@@ -571,6 +578,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         }
 
         // Track all elements that should be kept (reused or newly created)
+        buildWarnings = new ArrayList<>();
+        Set<HierarchyLevel> positionalMatchWarned = new HashSet<>();
         Set<DocStruct> activeElements = new HashSet<>();
 
         int numLevels = hierarchyLevels.size();
@@ -598,7 +607,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 DocStruct parent = (lvl == 0) ? contentRoot : currentStructs[lvl - 1];
 
                 // Try to reuse an existing child that matches type and grouping key
-                DocStruct existing = findReusableChild(parent, levelConfig, key, prefs, activeElements);
+                DocStruct existing = findReusableChild(parent, levelConfig, key, prefs, activeElements,
+                        positionalMatchWarned);
 
                 DocStruct struct;
                 if (existing != null) {
@@ -710,35 +720,76 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
 
     /**
      * Finds an existing child of {@code parent} that can be reused for the given hierarchy level and key.
-     * A child matches when it has the same struct type and the same value in the configured metadata field.
+     * When {@code matchMetadata} is configured, matches by that metadata field using the configured match mode.
+     * When {@code matchMetadata} is blank, falls back to positional matching (first non-active child of
+     * matching struct type) and records a warning once per level.
      * Returns {@code null} if no reusable match is found.
      */
     private DocStruct findReusableChild(DocStruct parent, HierarchyLevel levelConfig, String key,
-            Prefs prefs, Set<DocStruct> alreadyActive) {
-        if (parent.getAllChildren() == null || StringUtils.isBlank(levelConfig.metadataField())) {
+            Prefs prefs, Set<DocStruct> alreadyActive, Set<HierarchyLevel> positionalMatchWarned) {
+        if (parent.getAllChildren() == null) {
             return null;
         }
-        MetadataType mdType = prefs.getMetadataTypeByName(levelConfig.metadataField());
-        if (mdType == null) {
+
+        if (StringUtils.isNotBlank(levelConfig.matchMetadata())) {
+            // Semantic matching by configured metadata field
+            MetadataType mdType = prefs.getMetadataTypeByName(levelConfig.matchMetadata());
+            if (mdType == null) {
+                return null;
+            }
+            for (DocStruct child : parent.getAllChildren()) {
+                if (alreadyActive.contains(child)) {
+                    continue;
+                }
+                if (!child.getType().getName().equals(levelConfig.structType())) {
+                    continue;
+                }
+                List<? extends Metadata> mdList = child.getAllMetadataByType(mdType);
+                if (mdList != null) {
+                    for (Metadata md : mdList) {
+                        if (matchesValue(md.getValue(), key, levelConfig.matchMode(),
+                                levelConfig.matchDirection())) {
+                            return child;
+                        }
+                    }
+                }
+            }
             return null;
+        }
+
+        // Positional fallback: return first non-active child of matching struct type
+        if (positionalMatchWarned.add(levelConfig)) {
+            buildWarnings.add("No matchMetadata configured for level '" + levelConfig.structType()
+                    + "'; using positional matching for existing elements");
         }
         for (DocStruct child : parent.getAllChildren()) {
             if (alreadyActive.contains(child)) {
                 continue;
             }
-            if (!child.getType().getName().equals(levelConfig.structType())) {
-                continue;
-            }
-            List<? extends Metadata> mdList = child.getAllMetadataByType(mdType);
-            if (mdList != null) {
-                for (Metadata md : mdList) {
-                    if (key.equals(md.getValue())) {
-                        return child;
-                    }
-                }
+            if (child.getType().getName().equals(levelConfig.structType())) {
+                return child;
             }
         }
         return null;
+    }
+
+    private static boolean matchesValue(String metadataValue, String excelValue, String matchMode,
+            String matchDirection) {
+        String subject;
+        String target;
+        if ("excelMatchesMetadata".equals(matchDirection)) {
+            subject = excelValue;
+            target = metadataValue;
+        } else {
+            subject = metadataValue;
+            target = excelValue;
+        }
+        return switch (matchMode) {
+            case "endsWith" -> subject.endsWith(target);
+            case "startsWith" -> subject.startsWith(target);
+            case "contains" -> subject.contains(target);
+            default -> subject.equals(target);
+        };
     }
 
     /**
