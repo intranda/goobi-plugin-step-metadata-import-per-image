@@ -184,17 +184,30 @@ pipeline {
         withCredentials([gitUsernamePassword(credentialsId: '93f7e7d3-8f74-4744-a785-518fc4d55314',
                  gitToolName: 'git-tool')]) {
           sh '''#!/bin/bash -xe
-              projectversion=$(mvn org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate -Dexpression=project.version -q -DforceStdout)
-              if [ $? != 0 ]
-              then 
-                  exit 1
-              elif [[ "${projectversion}" =~ "SNAPSHOT" ]]
-              then
-                  echo "This is a SNAPSHOT version"
-                  exit 1
-              fi
-              echo "${projectversion}"
-              git tag -a "v${projectversion}" -m "releasing v${projectversion}" && git push origin v"${projectversion}"
+            PLUGIN_NAME=$(basename $(git remote get-url origin) .git)
+
+            if [ -f "DO_NOT_PUBLISH" ]; then
+              REPO_URL="$COLLECTION_REPO_URL"
+              SUBMODULE_PATH="private-plugins/$PLUGIN_NAME"
+              BRANCH="master"
+            else
+              REPO_URL="$CORE_REPO_URL"
+              SUBMODULE_PATH="plugins/$PLUGIN_NAME"
+              BRANCH="develop"
+            fi
+
+            WORK_DIR=$(mktemp -d)
+            git clone --depth 1 --branch $BRANCH "$REPO_URL" "$WORK_DIR"
+            cd "$WORK_DIR"
+            git submodule update --init --remote -- "$SUBMODULE_PATH"
+            git add "$SUBMODULE_PATH"
+            if git diff --cached --quiet; then
+              echo "Submodule already up to date."
+            else
+              git commit -m "Update ${PLUGIN_NAME} to latest master"
+              git push origin $BRANCH
+            fi
+            rm -rf "$WORK_DIR"
           '''
         }
       }
