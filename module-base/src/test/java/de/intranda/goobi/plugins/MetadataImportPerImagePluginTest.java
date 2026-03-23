@@ -460,9 +460,9 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "", "", "exact"));
+                "Chapter", "URI", "TitleDocMain", "", "", "exact", "metadataMatchesExcel"));
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "MissingColumn", "TitleDocMain", "", "", "exact"));
+                "Chapter", "MissingColumn", "TitleDocMain", "", "", "exact", "metadataMatchesExcel"));
 
         // Rows that don't have "MissingColumn" and mismatched counts
         List<Map<String, String>> rows = new ArrayList<>();
@@ -483,7 +483,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "NonExistentType", "URI", "", "", "", "exact"));
+                "NonExistentType", "URI", "", "", "", "exact", "metadataMatchesExcel"));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
@@ -498,7 +498,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "NonExistentField", "", "", "exact"));
+                "Chapter", "URI", "NonExistentField", "", "", "exact", "metadataMatchesExcel"));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
@@ -513,7 +513,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "", "NonExistentMatchField", "exact"));
+                "Chapter", "URI", "TitleDocMain", "", "NonExistentMatchField", "exact", "metadataMatchesExcel"));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
@@ -528,13 +528,28 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "", "", "invalidMode"));
+                "Chapter", "URI", "TitleDocMain", "", "", "invalidMode", "metadataMatchesExcel"));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention invalid matchMode",
                 result.getErrors().stream().anyMatch(e -> e.contains("invalidMode")));
+    }
+
+    @Test
+    public void testValidateConfigInvalidMatchDirection() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", "", "", "exact", "invalidDirection"));
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention invalid matchDirection",
+                result.getErrors().stream().anyMatch(e -> e.contains("invalidDirection")));
     }
 
     @Test
@@ -596,7 +611,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "", "", "exact")); // no fallback
+                "Chapter", "URI", "TitleDocMain", "", "", "exact", "metadataMatchesExcel")); // no fallback
 
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> row1 = new HashMap<>();
@@ -656,9 +671,9 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "Fallback1", "", "exact"));
+                "Chapter", "URI", "TitleDocMain", "Fallback1", "", "exact", "metadataMatchesExcel"));
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "Structure", "TitleDocMain", "Fallback2", "", "exact"));
+                "Chapter", "Structure", "TitleDocMain", "Fallback2", "", "exact", "metadataMatchesExcel"));
 
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> row = new HashMap<>();
@@ -681,7 +696,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "", "", "exact"));
+                "Chapter", "URI", "TitleDocMain", "", "", "exact", "metadataMatchesExcel"));
 
         // Pattern: A, B, A — non-contiguous
         List<Map<String, String>> rows = new ArrayList<>();

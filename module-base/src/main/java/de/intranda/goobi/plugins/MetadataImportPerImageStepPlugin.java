@@ -109,7 +109,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     levelConfig.getString("@metadataField", ""),
                     levelConfig.getString("@fallbackTitle", ""),
                     levelConfig.getString("@matchMetadata", ""),
-                    levelConfig.getString("@matchMode", "exact")
+                    levelConfig.getString("@matchMode", "exact"),
+                    levelConfig.getString("@matchDirection", "metadataMatchesExcel")
             ));
         }
 
@@ -305,6 +306,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             }
             if (!VALID_MATCH_MODES.contains(level.matchMode())) {
                 result.addError("Invalid matchMode '" + level.matchMode() + "'; must be one of: " + VALID_MATCH_MODES);
+            }
+            if (!VALID_MATCH_DIRECTIONS.contains(level.matchDirection())) {
+                result.addError("Invalid matchDirection '" + level.matchDirection()
+                        + "'; must be one of: " + VALID_MATCH_DIRECTIONS);
             }
         }
 
@@ -768,9 +773,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     private static final Set<String> VALID_MATCH_MODES = Set.of("exact", "endsWith", "startsWith", "contains");
+    private static final Set<String> VALID_MATCH_DIRECTIONS = Set.of("metadataMatchesExcel", "excelMatchesMetadata");
 
     record HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle,
-            String matchMetadata, String matchMode) {
+            String matchMetadata, String matchMode, String matchDirection) {
     }
 
     static class ValidationResult {
