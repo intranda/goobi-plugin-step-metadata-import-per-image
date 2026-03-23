@@ -55,6 +55,7 @@ import org.goobi.production.enums.PluginReturnValue;
 import org.powermock.api.support.membermodification.MemberModifier;
 import ugh.dl.DocStruct;
 import ugh.dl.Fileformat;
+import ugh.dl.Metadata;
 import ugh.dl.MetadataType;
 import ugh.dl.Prefs;
 import ugh.dl.Reference;
@@ -342,6 +343,47 @@ public class MetadataImportPerImagePluginTest {
         assertEquals("different_uri1", volume.getAllChildren().get(0).getAllMetadata().get(0).getValue());
     }
 
+    @Test
+    public void testBuildStructurePreservesExistingMetadata() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+
+        // First build: creates the hierarchy from scratch
+        plugin.buildStructure(ff, prefs, rows);
+
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1 = volume.getAllChildren().get(0);
+        assertEquals("uri1", chapterUri1.getAllMetadata().get(0).getValue());
+
+        // Simulate external metadata added after first import (e.g. by a user or another plugin)
+        MetadataType shortTitleType = prefs.getMetadataTypeByName("TitleDocMainShort");
+        Metadata extraMd = new Metadata(shortTitleType);
+        extraMd.setValue("important value that must survive re-import");
+        chapterUri1.addMetadata(extraMd);
+
+        // Second build: same Excel data — should reuse existing elements and preserve metadata
+        plugin.buildStructure(ff, prefs, rows);
+
+        DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        assertEquals(2, volumeAfter.getAllChildren().size());
+
+        DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
+        assertEquals("Chapter", chapterUri1After.getType().getName());
+        assertEquals("uri1", chapterUri1After.getAllMetadataByType(
+                prefs.getMetadataTypeByName("TitleDocMain")).get(0).getValue());
+
+        // The externally added metadata must still be present
+        List<? extends Metadata> shortTitles = chapterUri1After.getAllMetadataByType(shortTitleType);
+        assertFalse("Existing metadata should be preserved after re-import", shortTitles.isEmpty());
+        assertEquals("important value that must survive re-import", shortTitles.get(0).getValue());
+    }
+
     @Test(expected = IllegalStateException.class)
     public void testBuildStructureWithoutPhysicalPages() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
@@ -418,9 +460,9 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", ""));
+                "Chapter", "URI", "TitleDocMain", "", "", "exact"));
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "MissingColumn", "TitleDocMain", ""));
+                "Chapter", "MissingColumn", "TitleDocMain", "", "", "exact"));
 
         // Rows that don't have "MissingColumn" and mismatched counts
         List<Map<String, String>> rows = new ArrayList<>();
@@ -441,7 +483,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "NonExistentType", "URI", "", ""));
+                "NonExistentType", "URI", "", "", "", "exact"));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
@@ -456,13 +498,43 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "NonExistentField", ""));
+                "Chapter", "URI", "NonExistentField", "", "", "exact"));
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
         assertTrue("Expected errors", result.hasErrors());
         assertTrue("Error should mention the field name",
                 result.getErrors().stream().anyMatch(e -> e.contains("NonExistentField")));
+    }
+
+    @Test
+    public void testValidateConfigMissingMatchMetadata() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", "", "NonExistentMatchField", "exact"));
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention the match metadata field",
+                result.getErrors().stream().anyMatch(e -> e.contains("NonExistentMatchField")));
+    }
+
+    @Test
+    public void testValidateConfigInvalidMatchMode() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>();
+
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", "", "", "invalidMode"));
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
+
+        assertTrue("Expected errors", result.hasErrors());
+        assertTrue("Error should mention invalid matchMode",
+                result.getErrors().stream().anyMatch(e -> e.contains("invalidMode")));
     }
 
     @Test
@@ -524,7 +596,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "")); // no fallback
+                "Chapter", "URI", "TitleDocMain", "", "", "exact")); // no fallback
 
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> row1 = new HashMap<>();
@@ -584,9 +656,9 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", "Fallback1"));
+                "Chapter", "URI", "TitleDocMain", "Fallback1", "", "exact"));
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "Structure", "TitleDocMain", "Fallback2"));
+                "Chapter", "Structure", "TitleDocMain", "Fallback2", "", "exact"));
 
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> row = new HashMap<>();
@@ -609,7 +681,7 @@ public class MetadataImportPerImagePluginTest {
         plugin.hierarchyLevels = new ArrayList<>();
 
         plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
-                "Chapter", "URI", "TitleDocMain", ""));
+                "Chapter", "URI", "TitleDocMain", "", "", "exact"));
 
         // Pattern: A, B, A — non-contiguous
         List<Map<String, String>> rows = new ArrayList<>();

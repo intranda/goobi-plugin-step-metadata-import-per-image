@@ -107,7 +107,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     levelConfig.getString("@structType", ""),
                     levelConfig.getString("@groupByColumn", ""),
                     levelConfig.getString("@metadataField", ""),
-                    levelConfig.getString("@fallbackTitle", "")
+                    levelConfig.getString("@fallbackTitle", ""),
+                    levelConfig.getString("@matchMetadata", ""),
+                    levelConfig.getString("@matchMode", "exact")
             ));
         }
 
@@ -296,6 +298,13 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             if (StringUtils.isNotBlank(level.metadataField())
                     && prefs.getMetadataTypeByName(level.metadataField()) == null) {
                 result.addError("Metadata field not found in ruleset: " + level.metadataField());
+            }
+            if (StringUtils.isNotBlank(level.matchMetadata())
+                    && prefs.getMetadataTypeByName(level.matchMetadata()) == null) {
+                result.addError("Match metadata field not found in ruleset: " + level.matchMetadata());
+            }
+            if (!VALID_MATCH_MODES.contains(level.matchMode())) {
+                result.addError("Invalid matchMode '" + level.matchMode() + "'; must be one of: " + VALID_MATCH_MODES);
             }
         }
 
@@ -530,15 +539,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         DigitalDocument document = fileformat.getDigitalDocument();
         DocStruct contentRoot = getContentRoot(document);
 
-        // Remove existing children of content root (clean up references first)
-        if (contentRoot.getAllChildren() != null) {
-            for (DocStruct child : new ArrayList<>(contentRoot.getAllChildren())) {
-                removeReferencesRecursively(child);
-                contentRoot.removeChild(child);
-            }
-        }
-
-        // Remove existing direct page references from content root
+        // Remove existing direct page references from content root (will be re-linked below)
         if (contentRoot.getAllToReferences() != null) {
             for (Reference ref : new ArrayList<>(contentRoot.getAllToReferences())) {
                 contentRoot.removeReferenceTo(ref.getTarget());
@@ -564,6 +565,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
             log.warn("Metadata type '{}' not found in ruleset; skipping pagination labels", paginationLabelMetadata);
         }
 
+        // Track all elements that should be kept (reused or newly created)
+        Set<DocStruct> activeElements = new HashSet<>();
+
         int numLevels = hierarchyLevels.size();
         String[] currentKeys = new String[numLevels];
         DocStruct[] currentStructs = new DocStruct[numLevels];
@@ -582,39 +586,51 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 }
             }
 
-            // Create new DocStruct elements from changedAt level downward
+            // Create or reuse DocStruct elements from changedAt level downward
             for (int lvl = changedAt; lvl < numLevels; lvl++) {
                 String key = getKey(row, lvl);
                 HierarchyLevel levelConfig = hierarchyLevels.get(lvl);
+                DocStruct parent = (lvl == 0) ? contentRoot : currentStructs[lvl - 1];
 
-                DocStructType structType = prefs.getDocStrctTypeByName(levelConfig.structType());
-                if (structType == null) {
-                    throw new IllegalStateException("DocStruct type not found in ruleset: " + levelConfig.structType());
-                }
-                DocStruct newStruct = document.createDocStruct(structType);
+                // Try to reuse an existing child that matches type and grouping key
+                DocStruct existing = findReusableChild(parent, levelConfig, key, prefs, activeElements);
 
-                if (lvl == 0) {
-                    contentRoot.addChild(newStruct);
+                DocStruct struct;
+                if (existing != null) {
+                    struct = existing;
+                    activeElements.add(existing);
+                    // Clear old page references — they will be re-linked below
+                    if (struct.getAllToReferences() != null) {
+                        for (Reference ref : new ArrayList<>(struct.getAllToReferences())) {
+                            struct.removeReferenceTo(ref.getTarget());
+                        }
+                    }
                 } else {
-                    currentStructs[lvl - 1].addChild(newStruct);
-                }
+                    DocStructType structType = prefs.getDocStrctTypeByName(levelConfig.structType());
+                    if (structType == null) {
+                        throw new IllegalStateException("DocStruct type not found in ruleset: " + levelConfig.structType());
+                    }
+                    struct = document.createDocStruct(structType);
+                    parent.addChild(struct);
+                    activeElements.add(struct);
 
-                if (StringUtils.isNotBlank(levelConfig.metadataField())) {
-                    MetadataType mdType = prefs.getMetadataTypeByName(levelConfig.metadataField());
-                    if (mdType != null) {
-                        Metadata md = new Metadata(mdType);
-                        md.setValue(key);
-                        try {
-                            newStruct.addMetadata(md);
-                        } catch (MetadataTypeNotAllowedException e) {
-                            log.warn("Cannot add metadata '{}' to '{}': {}", levelConfig.metadataField(),
-                                    levelConfig.structType(), e.getMessage());
+                    if (StringUtils.isNotBlank(levelConfig.metadataField())) {
+                        MetadataType mdType = prefs.getMetadataTypeByName(levelConfig.metadataField());
+                        if (mdType != null) {
+                            Metadata md = new Metadata(mdType);
+                            md.setValue(key);
+                            try {
+                                struct.addMetadata(md);
+                            } catch (MetadataTypeNotAllowedException e) {
+                                log.warn("Cannot add metadata '{}' to '{}': {}", levelConfig.metadataField(),
+                                        levelConfig.structType(), e.getMessage());
+                            }
                         }
                     }
                 }
 
                 currentKeys[lvl] = key;
-                currentStructs[lvl] = newStruct;
+                currentStructs[lvl] = struct;
             }
 
             // Link this page to the content root and all active hierarchy levels
@@ -625,6 +641,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 }
             }
         }
+
+        // Remove children that are no longer active (and clean up their stale references)
+        removeUnreusedChildren(contentRoot, activeElements);
     }
 
     /**
@@ -685,6 +704,57 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
+     * Finds an existing child of {@code parent} that can be reused for the given hierarchy level and key.
+     * A child matches when it has the same struct type and the same value in the configured metadata field.
+     * Returns {@code null} if no reusable match is found.
+     */
+    private DocStruct findReusableChild(DocStruct parent, HierarchyLevel levelConfig, String key,
+            Prefs prefs, Set<DocStruct> alreadyActive) {
+        if (parent.getAllChildren() == null || StringUtils.isBlank(levelConfig.metadataField())) {
+            return null;
+        }
+        MetadataType mdType = prefs.getMetadataTypeByName(levelConfig.metadataField());
+        if (mdType == null) {
+            return null;
+        }
+        for (DocStruct child : parent.getAllChildren()) {
+            if (alreadyActive.contains(child)) {
+                continue;
+            }
+            if (!child.getType().getName().equals(levelConfig.structType())) {
+                continue;
+            }
+            List<? extends Metadata> mdList = child.getAllMetadataByType(mdType);
+            if (mdList != null) {
+                for (Metadata md : mdList) {
+                    if (key.equals(md.getValue())) {
+                        return child;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Recursively removes children that were not reused, cleaning up their page references.
+     * Reused children are kept but their own unreused sub-children are cleaned up recursively.
+     */
+    private void removeUnreusedChildren(DocStruct parent, Set<DocStruct> reusedElements) {
+        if (parent.getAllChildren() == null) {
+            return;
+        }
+        for (DocStruct child : new ArrayList<>(parent.getAllChildren())) {
+            if (reusedElements.contains(child)) {
+                removeUnreusedChildren(child, reusedElements);
+            } else {
+                removeReferencesRecursively(child);
+                parent.removeChild(child);
+            }
+        }
+    }
+
+    /**
      * Returns the grouping key for the given hierarchy level from the current row.
      * Applies the configured fallback title when the column value is empty.
      */
@@ -697,7 +767,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         return value;
     }
 
-    record HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle) {
+    private static final Set<String> VALID_MATCH_MODES = Set.of("exact", "endsWith", "startsWith", "contains");
+
+    record HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle,
+            String matchMetadata, String matchMode) {
     }
 
     static class ValidationResult {
