@@ -753,6 +753,232 @@ public class MetadataImportPerImagePluginTest {
     }
 
     @Test
+    public void testBuildStructurePositionalMatchingFallback() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        // Override levels to have no matchMetadata — triggers positional matching
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder", "", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "", "", "exact", "metadataMatchesExcel"));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+
+        // First build
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1 = volume.getAllChildren().get(0);
+
+        // Add marker metadata to verify element reuse
+        MetadataType shortTitleType = prefs.getMetadataTypeByName("TitleDocMainShort");
+        Metadata marker = new Metadata(shortTitleType);
+        marker.setValue("positional-marker");
+        chapterUri1.addMetadata(marker);
+
+        // Second build: positional matching should reuse the element
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
+        List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
+        assertFalse("Marker metadata should survive positional reuse", markers.isEmpty());
+        assertEquals("positional-marker", markers.get(0).getValue());
+
+        // Warnings should be populated
+        assertFalse("buildWarnings should contain positional matching warnings", plugin.buildWarnings.isEmpty());
+    }
+
+    @Test
+    public void testBuildStructureMatchMetadataDifferentFromWriteField() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        // matchMetadata="_ucc_id" but metadataField="TitleDocMain" (write field)
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "_ucc_id", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder",
+                        "TitleDocMain", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "",
+                        "TitleDocMain", "exact", "metadataMatchesExcel"));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+
+        // First build: creates structure with TitleDocMain set to the group key
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1 = volume.getAllChildren().get(0);
+
+        // Manually add _ucc_id metadata (simulating external enrichment)
+        MetadataType uccIdType = prefs.getMetadataTypeByName("_ucc_id");
+        Metadata uccId = new Metadata(uccIdType);
+        uccId.setValue("uri1");
+        chapterUri1.addMetadata(uccId);
+
+        // Add marker to verify reuse
+        MetadataType shortTitleType = prefs.getMetadataTypeByName("TitleDocMainShort");
+        Metadata marker = new Metadata(shortTitleType);
+        marker.setValue("match-by-ucc-id");
+        chapterUri1.addMetadata(marker);
+
+        // Second build: should match by _ucc_id, not TitleDocMain
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
+        List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
+        assertFalse("Marker should survive when matched by _ucc_id", markers.isEmpty());
+        assertEquals("match-by-ucc-id", markers.get(0).getValue());
+    }
+
+    @Test
+    public void testBuildStructureMatchModeEndsWith() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        // matchMetadata="_ucc_id", matchMode="endsWith" (metadata ends with Excel value)
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "_ucc_id", "endsWith", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder",
+                        "TitleDocMain", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "",
+                        "TitleDocMain", "exact", "metadataMatchesExcel"));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+
+        // First build
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1 = volume.getAllChildren().get(0);
+
+        // Set _ucc_id with a prefix — simulating metadata that has a longer path
+        MetadataType uccIdType = prefs.getMetadataTypeByName("_ucc_id");
+        Metadata uccId = new Metadata(uccIdType);
+        uccId.setValue("/aspace/repositories/11/uri1");
+        chapterUri1.addMetadata(uccId);
+
+        // Add marker
+        MetadataType shortTitleType = prefs.getMetadataTypeByName("TitleDocMainShort");
+        Metadata marker = new Metadata(shortTitleType);
+        marker.setValue("endswith-match");
+        chapterUri1.addMetadata(marker);
+
+        // Second build: Excel has "uri1", metadata has "/aspace/repositories/11/uri1"
+        // endsWith should match because metadata.endsWith("uri1") is true
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
+        List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
+        assertFalse("Marker should survive endsWith matching", markers.isEmpty());
+        assertEquals("endswith-match", markers.get(0).getValue());
+    }
+
+    @Test
+    public void testBuildStructureMatchModeEndsWithExcelMatchesMetadata() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        // matchDirection="excelMatchesMetadata": Excel value is tested with endsWith against metadata
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "_ucc_id", "endsWith", "excelMatchesMetadata"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder",
+                        "TitleDocMain", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "",
+                        "TitleDocMain", "exact", "metadataMatchesExcel"));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        // Excel URIs have a prefix; metadata stores just the short ID
+        List<Map<String, String>> rows = new ArrayList<>();
+        rows.add(row("/aspace/repo/uri1", "folder1", "p1", "caption1"));
+        rows.add(row("/aspace/repo/uri1", "folder1", "p2", "caption1"));
+        rows.add(row("/aspace/repo/uri1", "folder1", "p3", "caption2"));
+        rows.add(row("/aspace/repo/uri1", "folder2", "p4", "caption3"));
+        rows.add(row("/aspace/repo/uri1", "folder2", "p5", "caption3"));
+        rows.add(row("/aspace/repo/uri2", "folder3", "p6", "caption4"));
+        rows.add(row("/aspace/repo/uri2", "folder3", "p7", "caption4"));
+        rows.add(row("/aspace/repo/uri2", "folder3", "p8", "caption5"));
+        rows.add(row("/aspace/repo/uri2", "", "p9", "caption6"));
+        rows.add(row("/aspace/repo/uri2", "", "p10", "caption6"));
+
+        // First build
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1 = volume.getAllChildren().get(0);
+
+        // Set _ucc_id to the short value — metadata stores "uri1"
+        MetadataType uccIdType = prefs.getMetadataTypeByName("_ucc_id");
+        Metadata uccId = new Metadata(uccIdType);
+        uccId.setValue("uri1");
+        chapterUri1.addMetadata(uccId);
+
+        // Add marker
+        MetadataType shortTitleType = prefs.getMetadataTypeByName("TitleDocMainShort");
+        Metadata marker = new Metadata(shortTitleType);
+        marker.setValue("reverse-endswith");
+        chapterUri1.addMetadata(marker);
+
+        // Second build: Excel "/aspace/repo/uri1".endsWith("uri1") -> true
+        plugin.buildStructure(ff, prefs, rows);
+        DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
+        List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
+        assertFalse("Marker should survive excelMatchesMetadata endsWith matching", markers.isEmpty());
+        assertEquals("reverse-endswith", markers.get(0).getValue());
+    }
+
+    @Test
+    public void testPositionalMatchingWarningOncePerLevel() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        // All levels without matchMetadata
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder", "", "exact", "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "", "", "exact", "metadataMatchesExcel"));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+        plugin.buildStructure(ff, prefs, rows);
+
+        // Should have exactly 3 warnings (one per level), not one per row
+        assertEquals("Should have exactly one warning per level", 3, plugin.buildWarnings.size());
+        assertTrue(plugin.buildWarnings.stream().anyMatch(w -> w.contains("Chapter")));
+        assertTrue(plugin.buildWarnings.stream().anyMatch(w -> w.contains("Figure")));
+    }
+
+    @Test
     public void testRunEndToEnd() throws Exception {
         File excelFile = folder.newFile("import.xlsx");
         createTestExcel(excelFile, createTestRows());
