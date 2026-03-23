@@ -24,13 +24,20 @@
         <!--
             Ordered hierarchy levels to create beneath the logical root element.
             Attributes:
-              structType     - DocStruct type name as defined in the ruleset
-              groupByColumn  - Excel column header whose value determines when a new element is started
-              metadataField  - Metadata type to assign the group key as value (optional)
-              fallbackTitle  - Value to use when the column is empty (optional)
+              structType       - DocStruct type name as defined in the ruleset
+              groupByColumn    - Excel column header whose value determines when a new element is started
+              metadataField    - Metadata type to assign the group key as value (optional)
+              fallbackTitle    - Value to use when the column is empty (optional)
+              matchMetadata    - Metadata type on existing elements to match against the Excel column value
+                                 when reusing elements (optional; if absent, positional matching is used)
+              matchMode        - Comparison strategy: exact (default), endsWith, startsWith, contains
+              matchDirection   - Which value the matchMode operates on:
+                                 metadataMatchesExcel (default) — metadata value is tested against Excel value
+                                 excelMatchesMetadata — Excel value is tested against metadata value
         -->
         <hierarchy>
-            <level structType="ArchivalObject" groupByColumn="URI" metadataField="TitleDocMain"/>
+            <level structType="ArchivalObject" groupByColumn="URI" metadataField="TitleDocMain"
+                   matchMetadata="AeonResourceId" matchMode="endsWith"/>
             <level structType="ArchivalFolder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
             <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain"/>
         </hierarchy>
