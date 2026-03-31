@@ -12,6 +12,10 @@ pipeline {
     buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '15', daysToKeepStr: '90', numToKeepStr: '')
   }
 
+  environment {
+    NEXUS_BASE = 'intranda-nexus::https://nexus.intranda.com/repository'
+  }
+
   stages {
     stage('prepare') {
       steps {
@@ -157,9 +161,9 @@ pipeline {
       steps {
         script {
           if (fileExists('module-lib/pom.xml')) {
-            def altRepo = fileExists('DO_NOT_PUBLISH')
-                    ? "-DaltDeploymentRepository=\$NEXUS_INTERNAL_REPO -DaltSnapshotDeploymentRepository=\$NEXUS_INTERNAL_REPO"
-                    : ''
+            def repo = fileExists('DO_NOT_PUBLISH') ? "\$NEXUS_PRIVATE_REPO" : "\$NEXUS_PUBLIC_REPO"
+            def altRepo = "-DaltDeploymentRepository=${env.NEXUS_BASE}/${repo}-releases" +
+                          " -DaltSnapshotDeploymentRepository=${env.NEXUS_BASE}/${repo}-snapshots"
             sh "mvn -N deploy -Dmaven.main.skip=true -Dmaven.test.skip=true -Drevision=\$BUILD_VERSION -U ${altRepo} --no-transfer-progress"
             sh "mvn -f module-lib/pom.xml deploy -Dmaven.main.skip=true -Dmaven.test.skip=true -Drevision=\$BUILD_VERSION -U ${altRepo} --no-transfer-progress"
           }
