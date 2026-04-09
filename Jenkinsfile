@@ -1,15 +1,14 @@
+def mavenDockerImage = 'maven:3-eclipse-temurin-21'
+def mavenDockerArgs = '-v $HOME/.m2:/var/maven/.m2:z -v $HOME/.config:/var/maven/.config -v $HOME/.sonar:/var/maven/.sonar -u 1000 -e _JAVA_OPTIONS=-Duser.home=/var/maven -e MAVEN_CONFIG=/var/maven/.m2'
 
 pipeline {
 
-  agent {
-    docker {
-      image 'maven:3-eclipse-temurin-21'
-      args '-v $HOME/.m2:/var/maven/.m2:z -v $HOME/.config:/var/maven/.config -v $HOME/.sonar:/var/maven/.sonar -u 1000 -ti -e _JAVA_OPTIONS=-Duser.home=/var/maven -e MAVEN_CONFIG=/var/maven/.m2'
-    }
-  }
+  agent any
 
   options {
     buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '15', daysToKeepStr: '90', numToKeepStr: '')
+    disableConcurrentBuilds()
+    timeout(time: 10, unit: 'MINUTES')
   }
 
   environment {
@@ -17,41 +16,34 @@ pipeline {
   }
 
   stages {
-    stage('prepare') {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. BUILD
+    // ─────────────────────────────────────────────────────────────────────────
+    stage('build') {
+      agent {
+        docker {
+          image mavenDockerImage
+          args mavenDockerArgs
+          reuseNode true
+        }
+      }
       steps {
         sh 'git reset --hard HEAD && git clean -fdx'
+        script {
+          env.BUILD_VERSION = env.TAG_NAME ? env.TAG_NAME.replaceAll('^v', '') : 'dev-SNAPSHOT'
+        }
+        sh "mvn clean install -U -Drevision=\$BUILD_VERSION -DskipTests -Dcheckstyle.skip=true -Djacoco.skip=true -P '!local-development' --no-transfer-progress"
+        archiveArtifacts artifacts: '**/target/*.jar, install/*', fingerprint: true, allowEmptyArchive: true, onlyIfSuccessful: true
       }
     }
-    stage('build-snapshot') {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2. TEST + LINT  (not v*: parallel unit tests and checkstyle)
+    // ─────────────────────────────────────────────────────────────────────────
+    stage('test + lint') {
       when {
-        not {
-          anyOf {
-            branch 'master'
-            branch 'release_*'
-            branch 'hotfix_release_*'
-            branch 'sonar_*'
-            allOf {
-              branch 'PR-*'
-              expression { env.CHANGE_BRANCH.startsWith("release_") }
-            }
-          }
-        }
-      }
-      steps {
-        sh 'mvn clean verify -U -P snapshot-build'
-      }
-    }
-    stage('build-release') {
-      when {
-        anyOf {
-          branch 'master'
-          branch 'release_*'
-          branch 'hotfix_release_*'
-          allOf {
-            branch 'PR-*'
-            expression { env.CHANGE_BRANCH.startsWith("release_") }
-          }
-        }
+        not { branch 'v*' }
       }
       parallel {
 
@@ -105,57 +97,38 @@ pipeline {
                   sh cmd
                 }
               }
+              // Set plugin specific checkstyle thresholds like PLUGIN_NAME_THRESHOLD = VALUE in Jenkins settings
+              def pluginName = env.JOB_NAME.tokenize('/')[1].replace('-', '_').toUpperCase()
+              def thresholdKey = "${pluginName}_THRESHOLD"
+              def threshold = env[thresholdKey] ?: env.PLUGIN_CHECKSTYLE_THRESHOLD ?: '100'
             }
             recordIssues(
                     id: 'checkstyle-plugin',
                     tools: [checkStyle(pattern: '**/target/checkstyle-result.xml')],
-                    qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]]
+                    qualityGates: [
+                            [threshold: 1, type: 'TOTAL_HIGH', unstable: false],
+                            [threshold: threshold as int, type: 'TOTAL_NORMAL', unstable: true]
+                    ]
             )
           }
         }
 
       }
     }
-    stage('build-sonar') {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3. DEPLOY  (develop only: root pom + lib module if present)
+    //    Private plugins (DO_NOT_PUBLISH) deploy to internal Nexus
+    // ─────────────────────────────────────────────────────────────────────────
+    stage('deploy') {
       when {
-        branch 'sonar_*'
+        branch 'develop'
       }
-      steps {
-        sh 'mvn clean verify -U -P sonar-build'
-      }
-    }
-    stage('sonarcloud') {
-      when {
-        allOf {
-          anyOf {
-            branch 'master'
-            branch 'release_*'
-            branch 'hotfix_release_*'
-            branch 'sonar_*'
-            allOf {
-              branch 'PR-*'
-              expression { env.CHANGE_BRANCH.startsWith("release_") }
-            }
-          }
-          not {
-            expression {
-              return fileExists('DO_NOT_PUBLISH')
-            }
-          }
-        }
-      }
-      steps {
-        withCredentials([string(credentialsId: 'jenkins-sonarcloud', variable: 'TOKEN')]) {
-          sh 'mvn verify sonar:sonar -Dsonar.token=$TOKEN -U'
-        }
-      }
-    }
-    stage('deploy-libs') {
-      when {
-        anyOf {
-          branch 'master'
-          branch 'develop'
-          branch 'hotfix_release_*'
+      agent {
+        docker {
+          image mavenDockerImage
+          args mavenDockerArgs
+          reuseNode true
         }
       }
       steps {
@@ -170,12 +143,13 @@ pipeline {
         }
       }
     }
-    stage('tag release') {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 4. UPDATE PARENT  (master only: advance submodule pointer in core or collection)
+    // ─────────────────────────────────────────────────────────────────────────
+    stage('update-parent') {
       when {
-        anyOf {
-          branch 'master'
-          branch 'hotfix_release_*'
-        }
+        branch 'master'
       }
       agent {
         docker {
@@ -185,8 +159,7 @@ pipeline {
         }
       }
       steps {
-        withCredentials([gitUsernamePassword(credentialsId: '93f7e7d3-8f74-4744-a785-518fc4d55314',
-                 gitToolName: 'git-tool')]) {
+        withCredentials([gitUsernamePassword(credentialsId: '93f7e7d3-8f74-4744-a785-518fc4d55314', gitToolName: 'git-tool')]) {
           sh '''#!/bin/bash -xe
             PLUGIN_NAME=$(basename $(git remote get-url origin) .git)
 
@@ -216,26 +189,10 @@ pipeline {
         }
       }
     }
+
   }
 
   post {
-    always {
-      junit allowEmptyResults: true, testResults: "**/target/surefire-reports/*.xml"
-      step([
-        $class           : 'JacocoPublisher',
-        execPattern      : '**/target/jacoco.exec',
-        classPattern     : '**/target/classes/',
-        sourcePattern    : '**/src/main/java',
-        exclusionPattern : '**/*Test.class'
-      ])
-      recordIssues (
-        enabledForFailure: true, aggregatingResults: false,
-        tools: [checkStyle(pattern: 'target/checkstyle-result.xml', reportEncoding: 'UTF-8')]
-      )
-    }
-    success {
-      archiveArtifacts artifacts: '**/target/*.jar, install/*', fingerprint: true, onlyIfSuccessful: true
-    }
     changed {
       emailext(
               subject: '${DEFAULT_SUBJECT}',
@@ -245,4 +202,6 @@ pipeline {
       )
     }
   }
+
 }
+/* vim: set ts=2 sw=2 tw=120 et :*/
