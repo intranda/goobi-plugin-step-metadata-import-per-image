@@ -18,3 +18,5 @@ node_modules/
 .idea
 *.iml
 
+.flattened-pom.xml
+*/.flattened-pom.xml
