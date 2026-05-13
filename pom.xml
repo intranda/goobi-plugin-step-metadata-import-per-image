@@ -3,11 +3,15 @@
   <parent>
     <groupId>io.goobi.workflow</groupId>
     <artifactId>workflow-base</artifactId>
-    <version>26.03-SNAPSHOT</version>
+    <version>dev-SNAPSHOT</version>
     <relativePath />
   </parent>
   <groupId>io.goobi.workflow.plugin</groupId>
   <artifactId>plugin-step-metadata-import-per-image</artifactId>
+  <version>${revision}</version>
+  <properties>
+    <revision>dev-SNAPSHOT</revision>
+  </properties>
   <packaging>pom</packaging>
   <modules>
     <module>module-base</module>
