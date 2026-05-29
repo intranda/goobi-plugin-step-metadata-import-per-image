@@ -1061,14 +1061,12 @@ public class MetadataImportPerImagePluginTest {
         EasyMock.expect(MetadatenHelper.getMetaFileType(EasyMock.anyString())).andReturn("mets").anyTimes();
         EasyMock.expect(MetadatenHelper.getFileformatByName(EasyMock.anyString(), EasyMock.anyObject())).andReturn(ff)
                 .anyTimes();
-        EasyMock.expect(MetadatenHelper.getMetadataOfFileformat(EasyMock.anyObject(), EasyMock.anyBoolean()))
+        EasyMock.expect(MetadatenHelper.getMetadataOfFileformat(EasyMock.anyObject()))
                 .andReturn(Collections.emptyMap()).anyTimes();
         PowerMock.replay(MetadatenHelper.class);
 
         PowerMock.mockStatic(MetadataManager.class);
         MetadataManager.updateMetadata(EasyMock.anyInt(), EasyMock.anyObject());
-        EasyMock.expectLastCall().anyTimes();
-        MetadataManager.updateJSONMetadata(EasyMock.anyInt(), EasyMock.anyObject());
         EasyMock.expectLastCall().anyTimes();
         PowerMock.replay(MetadataManager.class);
 
