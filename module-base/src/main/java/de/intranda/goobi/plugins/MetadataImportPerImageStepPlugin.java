@@ -102,9 +102,11 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         log.trace("MetadataImportPerImage step plugin initialized");
     }
 
-    private void readConfiguration(Step step) {
+    public void readConfiguration(Step step) {
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        excelFilePath = myconfig.getString("excelFile", "");
+        if (StringUtils.isBlank(excelFilePath)) {
+            excelFilePath = myconfig.getString("excelFile", "");
+        }
         columnLabel = myconfig.getString("columnLabel", "Label");
         paginationLabelMetadata = myconfig.getString("paginationLabelMetadata", "logicalPageNumber");
 

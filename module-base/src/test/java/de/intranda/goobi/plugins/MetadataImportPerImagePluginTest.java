@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.FormulaError;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -30,6 +29,7 @@ import org.goobi.beans.Project;
 import org.goobi.beans.Ruleset;
 import org.goobi.beans.Step;
 import org.goobi.beans.User;
+import org.goobi.production.enums.PluginReturnValue;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -37,6 +37,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.support.membermodification.MemberModifier;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -51,8 +52,6 @@ import de.sub.goobi.metadaten.MetadatenHelper;
 import de.sub.goobi.metadaten.MetadatenImagesHelper;
 import de.sub.goobi.persistence.managers.MetadataManager;
 import de.sub.goobi.persistence.managers.ProcessManager;
-import org.goobi.production.enums.PluginReturnValue;
-import org.powermock.api.support.membermodification.MemberModifier;
 import ugh.dl.DocStruct;
 import ugh.dl.Fileformat;
 import ugh.dl.Metadata;
@@ -168,6 +167,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructureCreatesHierarchy() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
 
         Fileformat ff = new MetsMods(prefs);
@@ -208,6 +208,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructureSetsPaginationLabel() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
 
         Fileformat ff = new MetsMods(prefs);
@@ -227,6 +228,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructureClearsExistingPaginationLabelWhenEmpty() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
 
         Fileformat ff = new MetsMods(prefs);
@@ -258,6 +260,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructureLinksPages() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
 
         Fileformat ff = new MetsMods(prefs);
@@ -281,6 +284,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructureReplacesExistingChildren() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
 
         Fileformat ff = new MetsMods(prefs);
@@ -302,6 +306,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructureRemovesStaleReferences() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
 
         Fileformat ff = new MetsMods(prefs);
@@ -347,6 +352,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructurePreservesExistingMetadata() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
 
         Fileformat ff = new MetsMods(prefs);
@@ -430,6 +436,7 @@ public class MetadataImportPerImagePluginTest {
     public void testBuildStructureHandlesNullLogicalPageNumberType() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
+        plugin.readConfiguration(step);
         plugin.columnLabel = "Label";
         plugin.paginationLabelMetadata = "nonExistentMetadataType";
 
@@ -1049,7 +1056,8 @@ public class MetadataImportPerImagePluginTest {
 
         PowerMock.mockStaticPartial(VariableReplacer.class, "simpleReplace");
         EasyMock.expect(VariableReplacer.simpleReplace(EasyMock.anyString(), EasyMock.anyObject()))
-                .andAnswer(() -> (String) EasyMock.getCurrentArguments()[0]).anyTimes();
+                .andAnswer(() -> (String) EasyMock.getCurrentArguments()[0])
+                .anyTimes();
         PowerMock.replay(VariableReplacer.class);
 
         prefs = new Prefs();
@@ -1059,10 +1067,12 @@ public class MetadataImportPerImagePluginTest {
 
         PowerMock.mockStatic(MetadatenHelper.class);
         EasyMock.expect(MetadatenHelper.getMetaFileType(EasyMock.anyString())).andReturn("mets").anyTimes();
-        EasyMock.expect(MetadatenHelper.getFileformatByName(EasyMock.anyString(), EasyMock.anyObject())).andReturn(ff)
+        EasyMock.expect(MetadatenHelper.getFileformatByName(EasyMock.anyString(), EasyMock.anyObject()))
+                .andReturn(ff)
                 .anyTimes();
         EasyMock.expect(MetadatenHelper.getMetadataOfFileformat(EasyMock.anyObject()))
-                .andReturn(Collections.emptyMap()).anyTimes();
+                .andReturn(Collections.emptyMap())
+                .anyTimes();
         PowerMock.replay(MetadatenHelper.class);
 
         PowerMock.mockStatic(MetadataManager.class);
@@ -1153,8 +1163,7 @@ public class MetadataImportPerImagePluginTest {
     }
 
     /**
-     * Creates test row data matching the 10 pages in meta.xml.
-     * Structure: 2 URIs, varying folders, varying captions; one empty structure value.
+     * Creates test row data matching the 10 pages in meta.xml. Structure: 2 URIs, varying folders, varying captions; one empty structure value.
      */
     private List<Map<String, String>> createTestRows() {
         List<Map<String, String>> rows = new ArrayList<>();
