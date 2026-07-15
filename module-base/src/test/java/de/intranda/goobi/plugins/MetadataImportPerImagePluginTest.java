@@ -1,10 +1,16 @@
 package de.intranda.goobi.plugins;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -23,24 +29,23 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.easymock.EasyMock;
 import org.goobi.beans.Process;
 import org.goobi.beans.Project;
 import org.goobi.beans.Ruleset;
 import org.goobi.beans.Step;
 import org.goobi.beans.User;
 import org.goobi.production.enums.PluginReturnValue;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.support.membermodification.MemberModifier;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import de.sub.goobi.config.ConfigurationHelper;
 import de.sub.goobi.helper.Helper;
@@ -60,16 +65,16 @@ import ugh.dl.Prefs;
 import ugh.dl.Reference;
 import ugh.fileformats.mets.MetsMods;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({ MetadatenHelper.class, VariableReplacer.class, ConfigurationHelper.class, ProcessManager.class,
-        MetadataManager.class, StorageProvider.class, Helper.class, MetadatenImagesHelper.class })
-@PowerMockIgnore({ "javax.management.*", "javax.xml.*", "org.xml.*", "org.w3c.*", "javax.net.ssl.*", "jdk.internal.reflect.*" })
+@ExtendWith(MockitoExtension.class)
+// LENIENT: tests such as testConstructor/testInit and the validate* tests exercise only part of the plugin,
+// leaving some of the shared setUp() stubs unused in those individual tests.
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class MetadataImportPerImagePluginTest {
 
     private static String resourcesFolder;
 
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
+    @TempDir
+    File tempDir;
 
     private File processDirectory;
     private File metadataDirectory;
@@ -78,7 +83,16 @@ public class MetadataImportPerImagePluginTest {
     private Prefs prefs;
     private Path metaTarget;
 
-    @BeforeClass
+    private MockedStatic<ConfigurationHelper> mockedConfigHelper;
+    private MockedStatic<VariableReplacer> mockedVariableReplacer;
+    private MockedStatic<MetadatenHelper> mockedMetadatenHelper;
+    private MockedStatic<MetadataManager> mockedMetadataManager;
+    private MockedStatic<ProcessManager> mockedProcessManager;
+    private MockedStatic<Helper> mockedHelper;
+    private MockedStatic<StorageProvider> mockedStorageProvider;
+    private MockedConstruction<MetadatenImagesHelper> mockedImagesHelper;
+
+    @BeforeAll
     public static void setUpClass() throws Exception {
         resourcesFolder = "src/test/resources/";
 
@@ -113,7 +127,7 @@ public class MetadataImportPerImagePluginTest {
     @Test
     public void testParseExcel() throws Exception {
         // Create a test Excel file with known content
-        File excelFile = folder.newFile("test.xlsx");
+        File excelFile = new File(tempDir, "test.xlsx");
         createTestExcel(excelFile, createTestRows());
 
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
@@ -132,7 +146,7 @@ public class MetadataImportPerImagePluginTest {
 
     @Test
     public void testParseExcelWithFormulaErrorCell() throws Exception {
-        File excelFile = folder.newFile("error.xlsx");
+        File excelFile = new File(tempDir, "error.xlsx");
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Data");
             Row header = sheet.createRow(0);
@@ -386,11 +400,11 @@ public class MetadataImportPerImagePluginTest {
 
         // The externally added metadata must still be present
         List<? extends Metadata> shortTitles = chapterUri1After.getAllMetadataByType(shortTitleType);
-        assertFalse("Existing metadata should be preserved after re-import", shortTitles.isEmpty());
+        assertFalse(shortTitles.isEmpty(), "Existing metadata should be preserved after re-import");
         assertEquals("important value that must survive re-import", shortTitles.get(0).getValue());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testBuildStructureWithoutPhysicalPages() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
@@ -408,10 +422,10 @@ public class MetadataImportPerImagePluginTest {
         }
 
         List<Map<String, String>> rows = createTestRows();
-        plugin.buildStructure(ff, prefs, rows);
+        assertThrows(IllegalStateException.class, () -> plugin.buildStructure(ff, prefs, rows));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testBuildStructureThrowsForAnchorWithoutChildren() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
@@ -429,7 +443,7 @@ public class MetadataImportPerImagePluginTest {
         }
 
         List<Map<String, String>> rows = createTestRows();
-        plugin.buildStructure(ff, prefs, rows);
+        assertThrows(IllegalStateException.class, () -> plugin.buildStructure(ff, prefs, rows));
     }
 
     @Test
@@ -481,7 +495,7 @@ public class MetadataImportPerImagePluginTest {
         // imageCount=5 != rows.size()=1, physPageCount=3 != rows.size()=1, missing column "MissingColumn"
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 5, 3, 1);
 
-        assertTrue("Expected multiple errors", result.getErrors().size() >= 2);
+        assertTrue(result.getErrors().size() >= 2, "Expected multiple errors");
     }
 
     @Test
@@ -494,9 +508,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention the type name",
-                result.getErrors().stream().anyMatch(e -> e.contains("NonExistentType")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("NonExistentType")),
+                "Error should mention the type name");
     }
 
     @Test
@@ -509,9 +523,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention the field name",
-                result.getErrors().stream().anyMatch(e -> e.contains("NonExistentField")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("NonExistentField")),
+                "Error should mention the field name");
     }
 
     @Test
@@ -524,9 +538,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention the match metadata field",
-                result.getErrors().stream().anyMatch(e -> e.contains("NonExistentMatchField")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("NonExistentMatchField")),
+                "Error should mention the match metadata field");
     }
 
     @Test
@@ -539,9 +553,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention invalid matchMode",
-                result.getErrors().stream().anyMatch(e -> e.contains("invalidMode")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("invalidMode")),
+                "Error should mention invalid matchMode");
     }
 
     @Test
@@ -554,9 +568,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention invalid matchDirection",
-                result.getErrors().stream().anyMatch(e -> e.contains("invalidDirection")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("invalidDirection")),
+                "Error should mention invalid matchDirection");
     }
 
     @Test
@@ -573,14 +587,14 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 1);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention the missing label column",
-                result.getErrors().stream().anyMatch(e -> e.contains("MissingLabelColumn")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("MissingLabelColumn")),
+                "Error should mention the missing label column");
     }
 
     @Test
     public void testParseDuplicateColumnHeaders() throws Exception {
-        File excelFile = folder.newFile("duplicate_headers.xlsx");
+        File excelFile = new File(tempDir, "duplicate_headers.xlsx");
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Data");
             Row header = sheet.createRow(0);
@@ -602,13 +616,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
 
-        try {
-            plugin.parseExcel(excelFile.getAbsolutePath());
-            fail("Expected IOException for duplicate column headers");
-        } catch (IOException e) {
-            assertTrue("Exception message should mention the duplicate header",
-                    e.getMessage().contains("Duplicate column header: URI"));
-        }
+        IOException e = assertThrows(IOException.class, () -> plugin.parseExcel(excelFile.getAbsolutePath()));
+        assertTrue(e.getMessage().contains("Duplicate column header: URI"),
+                "Exception message should mention the duplicate header");
     }
 
     @Test
@@ -632,9 +642,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 2, 2, 1);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention the row and column",
-                result.getErrors().stream().anyMatch(e -> e.contains("Row 3") && e.contains("URI")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("Row 3") && e.contains("URI")),
+                "Error should mention the row and column");
     }
 
     @Test
@@ -647,9 +657,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 0, 0, 1);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention no data rows",
-                result.getErrors().stream().anyMatch(e -> e.contains("no data rows")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("no data rows")),
+                "Error should mention no data rows");
     }
 
     @Test
@@ -661,14 +671,14 @@ public class MetadataImportPerImagePluginTest {
         List<Map<String, String>> rows = new ArrayList<>();
         Map<String, String> row = new HashMap<>();
         row.put("Label", "p1");
-        row.put("URI", "uri\u0003value"); // contains control char 0x03
+        row.put("URI", "urivalue"); // contains control char 0x03
         rows.add(row);
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 1);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention XML control characters",
-                result.getErrors().stream().anyMatch(e -> e.contains("invalid XML control characters")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("invalid XML control characters")),
+                "Error should mention XML control characters");
     }
 
     @Test
@@ -691,9 +701,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 1);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention all grouping columns empty",
-                result.getErrors().stream().anyMatch(e -> e.contains("all grouping columns are empty")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("all grouping columns are empty")),
+                "Error should mention all grouping columns empty");
     }
 
     @Test
@@ -722,10 +732,10 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 3, 3, 1);
 
-        assertFalse("Should not have errors", result.hasErrors());
-        assertFalse("Should have warnings", result.getWarnings().isEmpty());
-        assertTrue("Warning should mention non-contiguous values",
-                result.getWarnings().stream().anyMatch(w -> w.contains("Non-contiguous") && w.contains("A")));
+        assertFalse(result.hasErrors(), "Should not have errors");
+        assertFalse(result.getWarnings().isEmpty(), "Should have warnings");
+        assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("Non-contiguous") && w.contains("A")),
+                "Warning should mention non-contiguous values");
     }
 
     @Test
@@ -741,10 +751,10 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 3);
 
-        assertFalse("Should not have errors", result.hasErrors());
-        assertFalse("Should have warnings", result.getWarnings().isEmpty());
-        assertTrue("Warning should mention multiple sheets",
-                result.getWarnings().stream().anyMatch(w -> w.contains("3 sheets")));
+        assertFalse(result.hasErrors(), "Should not have errors");
+        assertFalse(result.getWarnings().isEmpty(), "Should have warnings");
+        assertTrue(result.getWarnings().stream().anyMatch(w -> w.contains("3 sheets")),
+                "Warning should mention multiple sheets");
     }
 
     @Test
@@ -754,9 +764,9 @@ public class MetadataImportPerImagePluginTest {
 
         MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
 
-        assertTrue("Expected errors", result.hasErrors());
-        assertTrue("Error should mention no hierarchy levels",
-                result.getErrors().stream().anyMatch(e -> e.contains("No hierarchy levels configured")));
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("No hierarchy levels configured")),
+                "Error should mention no hierarchy levels");
     }
 
     @Test
@@ -795,11 +805,11 @@ public class MetadataImportPerImagePluginTest {
         DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
         DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
         List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
-        assertFalse("Marker metadata should survive positional reuse", markers.isEmpty());
+        assertFalse(markers.isEmpty(), "Marker metadata should survive positional reuse");
         assertEquals("positional-marker", markers.get(0).getValue());
 
         // Warnings should be populated
-        assertFalse("buildWarnings should contain positional matching warnings", plugin.buildWarnings.isEmpty());
+        assertFalse(plugin.buildWarnings.isEmpty(), "buildWarnings should contain positional matching warnings");
     }
 
     @Test
@@ -846,7 +856,7 @@ public class MetadataImportPerImagePluginTest {
         DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
         DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
         List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
-        assertFalse("Marker should survive when matched by _ucc_id", markers.isEmpty());
+        assertFalse(markers.isEmpty(), "Marker should survive when matched by _ucc_id");
         assertEquals("match-by-ucc-id", markers.get(0).getValue());
     }
 
@@ -895,7 +905,7 @@ public class MetadataImportPerImagePluginTest {
         DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
         DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
         List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
-        assertFalse("Marker should survive endsWith matching", markers.isEmpty());
+        assertFalse(markers.isEmpty(), "Marker should survive endsWith matching");
         assertEquals("endswith-match", markers.get(0).getValue());
     }
 
@@ -954,7 +964,7 @@ public class MetadataImportPerImagePluginTest {
         DocStruct volumeAfter = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
         DocStruct chapterUri1After = volumeAfter.getAllChildren().get(0);
         List<? extends Metadata> markers = chapterUri1After.getAllMetadataByType(shortTitleType);
-        assertFalse("Marker should survive excelMatchesMetadata endsWith matching", markers.isEmpty());
+        assertFalse(markers.isEmpty(), "Marker should survive excelMatchesMetadata endsWith matching");
         assertEquals("reverse-endswith", markers.get(0).getValue());
     }
 
@@ -980,14 +990,14 @@ public class MetadataImportPerImagePluginTest {
         plugin.buildStructure(ff, prefs, rows);
 
         // Should have exactly 3 warnings (one per level), not one per row
-        assertEquals("Should have exactly one warning per level", 3, plugin.buildWarnings.size());
+        assertEquals(3, plugin.buildWarnings.size(), "Should have exactly one warning per level");
         assertTrue(plugin.buildWarnings.stream().anyMatch(w -> w.contains("Chapter")));
         assertTrue(plugin.buildWarnings.stream().anyMatch(w -> w.contains("Figure")));
     }
 
     @Test
     public void testRunEndToEnd() throws Exception {
-        File excelFile = folder.newFile("import.xlsx");
+        File excelFile = new File(tempDir, "import.xlsx");
         createTestExcel(excelFile, createTestRows());
 
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
@@ -1014,12 +1024,10 @@ public class MetadataImportPerImagePluginTest {
         assertEquals(10, volume.getAllToReferences().size());
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        MemberModifier.suppress(MemberModifier.method(MetadatenImagesHelper.class, "createPagination",
-                Process.class, String.class));
-
-        metadataDirectory = folder.newFolder("metadata");
+        metadataDirectory = new File(tempDir, "metadata");
+        metadataDirectory.mkdirs();
         processDirectory = new File(metadataDirectory + File.separator + "1");
         processDirectory.mkdirs();
         String metadataDirectoryName = metadataDirectory.getAbsolutePath() + File.separator;
@@ -1032,67 +1040,53 @@ public class MetadataImportPerImagePluginTest {
         Path anchorTarget = Paths.get(processDirectory.getAbsolutePath(), "meta_anchor.xml");
         Files.copy(anchorSource, anchorTarget);
 
-        PowerMock.mockStatic(ConfigurationHelper.class);
-        ConfigurationHelper configurationHelper = EasyMock.createNiceMock(ConfigurationHelper.class);
-        EasyMock.expect(ConfigurationHelper.getInstance()).andReturn(configurationHelper).anyTimes();
-        EasyMock.expect(configurationHelper.getMetsEditorLockingTime()).andReturn(1800000l).anyTimes();
-        EasyMock.expect(configurationHelper.isAllowWhitespacesInFolder()).andReturn(false).anyTimes();
-        EasyMock.expect(configurationHelper.useS3()).andReturn(false).anyTimes();
-        EasyMock.expect(configurationHelper.isUseProxy()).andReturn(false).anyTimes();
-        EasyMock.expect(configurationHelper.getGoobiContentServerTimeOut()).andReturn(60000).anyTimes();
-        EasyMock.expect(configurationHelper.getMetadataFolder()).andReturn(metadataDirectoryName).anyTimes();
-        EasyMock.expect(configurationHelper.getRulesetFolder()).andReturn(resourcesFolder).anyTimes();
-        EasyMock.expect(configurationHelper.getProcessImagesMainDirectoryName()).andReturn("00469418X_media").anyTimes();
-        EasyMock.expect(configurationHelper.isUseMasterDirectory()).andReturn(true).anyTimes();
-        EasyMock.expect(configurationHelper.isCreateMasterDirectory()).andReturn(false).anyTimes();
-        EasyMock.expect(configurationHelper.getProcessImagesMasterDirectoryName()).andReturn("00469418X_master").anyTimes();
-        EasyMock.expect(configurationHelper.getProcessImagesFallbackDirectoryName()).andReturn("").anyTimes();
-        EasyMock.expect(configurationHelper.getConfigurationFolder()).andReturn(resourcesFolder).anyTimes();
-        EasyMock.expect(configurationHelper.getNumberOfMetaBackups()).andReturn(0).anyTimes();
-        EasyMock.expect(configurationHelper.getScriptCreateDirMeta()).andReturn("").anyTimes();
-        EasyMock.expect(configurationHelper.getGoobiFolder()).andReturn(resourcesFolder).anyTimes();
-        EasyMock.expect(configurationHelper.getScriptsFolder()).andReturn("").anyTimes();
-        EasyMock.replay(configurationHelper);
+        ConfigurationHelper configurationHelper = mock(ConfigurationHelper.class);
+        when(configurationHelper.getMetsEditorLockingTime()).thenReturn(1800000L);
+        when(configurationHelper.isAllowWhitespacesInFolder()).thenReturn(false);
+        when(configurationHelper.useS3()).thenReturn(false);
+        when(configurationHelper.isUseProxy()).thenReturn(false);
+        when(configurationHelper.getGoobiContentServerTimeOut()).thenReturn(60000);
+        when(configurationHelper.getMetadataFolder()).thenReturn(metadataDirectoryName);
+        when(configurationHelper.getRulesetFolder()).thenReturn(resourcesFolder);
+        when(configurationHelper.getProcessImagesMainDirectoryName()).thenReturn("00469418X_media");
+        when(configurationHelper.isUseMasterDirectory()).thenReturn(true);
+        when(configurationHelper.isCreateMasterDirectory()).thenReturn(false);
+        when(configurationHelper.getProcessImagesMasterDirectoryName()).thenReturn("00469418X_master");
+        when(configurationHelper.getProcessImagesFallbackDirectoryName()).thenReturn("");
+        when(configurationHelper.getConfigurationFolder()).thenReturn(resourcesFolder);
+        when(configurationHelper.getNumberOfMetaBackups()).thenReturn(0);
+        when(configurationHelper.getScriptCreateDirMeta()).thenReturn("");
+        when(configurationHelper.getGoobiFolder()).thenReturn(resourcesFolder);
+        when(configurationHelper.getScriptsFolder()).thenReturn("");
 
-        PowerMock.mockStaticPartial(VariableReplacer.class, "simpleReplace");
-        EasyMock.expect(VariableReplacer.simpleReplace(EasyMock.anyString(), EasyMock.anyObject()))
-                .andAnswer(() -> (String) EasyMock.getCurrentArguments()[0])
-                .anyTimes();
-        PowerMock.replay(VariableReplacer.class);
+        mockedConfigHelper = mockStatic(ConfigurationHelper.class);
+        mockedConfigHelper.when(ConfigurationHelper::getInstance).thenReturn(configurationHelper);
+
+        mockedVariableReplacer = mockStatic(VariableReplacer.class);
+        mockedVariableReplacer.when(() -> VariableReplacer.simpleReplace(anyString(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         prefs = new Prefs();
         prefs.loadPrefs(resourcesFolder + "ruleset.xml");
         Fileformat ff = new MetsMods(prefs);
         ff.read(metaTarget.toString());
 
-        PowerMock.mockStatic(MetadatenHelper.class);
-        EasyMock.expect(MetadatenHelper.getMetaFileType(EasyMock.anyString())).andReturn("mets").anyTimes();
-        EasyMock.expect(MetadatenHelper.getFileformatByName(EasyMock.anyString(), EasyMock.anyObject()))
-                .andReturn(ff)
-                .anyTimes();
-        EasyMock.expect(MetadatenHelper.getMetadataOfFileformat(EasyMock.anyObject()))
-                .andReturn(Collections.emptyMap())
-                .anyTimes();
-        PowerMock.replay(MetadatenHelper.class);
+        mockedMetadatenHelper = mockStatic(MetadatenHelper.class);
+        mockedMetadatenHelper.when(() -> MetadatenHelper.getMetaFileType(anyString())).thenReturn("mets");
+        mockedMetadatenHelper.when(() -> MetadatenHelper.getFileformatByName(anyString(), any())).thenReturn(ff);
+        mockedMetadatenHelper.when(() -> MetadatenHelper.getMetadataOfFileformat(any()))
+                .thenReturn(Collections.emptyMap());
 
-        PowerMock.mockStatic(MetadataManager.class);
-        MetadataManager.updateMetadata(EasyMock.anyInt(), EasyMock.anyObject());
-        EasyMock.expectLastCall().anyTimes();
-        PowerMock.replay(MetadataManager.class);
+        // Prevent database and journal calls triggered by process.writeMetadataFile() and error reporting.
+        // The mocked static void methods are no-ops by default.
+        mockedMetadataManager = mockStatic(MetadataManager.class);
+        mockedProcessManager = mockStatic(ProcessManager.class);
+        mockedHelper = mockStatic(Helper.class);
 
-        PowerMock.mockStatic(Helper.class);
-        Helper.setFehlerMeldungUntranslated(EasyMock.anyString());
-        EasyMock.expectLastCall().anyTimes();
-        Helper.addMessageToProcessJournal(EasyMock.anyInt(), EasyMock.anyObject(), EasyMock.anyString());
-        EasyMock.expectLastCall().anyTimes();
-        PowerMock.replay(Helper.class);
-
-        PowerMock.mockStatic(StorageProvider.class);
-        StorageProviderInterface spMock = EasyMock.createNiceMock(StorageProviderInterface.class);
-        EasyMock.expect(StorageProvider.getInstance()).andReturn(spMock).anyTimes();
-        EasyMock.expect(spMock.isFileExists(EasyMock.anyObject())).andReturn(true).anyTimes();
-        EasyMock.expect(spMock.listFiles(EasyMock.anyString())).andAnswer(() -> {
-            String dirPath = (String) EasyMock.getCurrentArguments()[0];
+        StorageProviderInterface spMock = mock(StorageProviderInterface.class);
+        when(spMock.isFileExists(any())).thenReturn(true);
+        when(spMock.listFiles(anyString())).thenAnswer(invocation -> {
+            String dirPath = invocation.getArgument(0);
             Path dir = Paths.get(dirPath);
             if (Files.isDirectory(dir)) {
                 try (var stream = Files.list(dir)) {
@@ -1100,11 +1094,12 @@ public class MetadataImportPerImagePluginTest {
                 }
             }
             return List.of();
-        }).anyTimes();
-        EasyMock.replay(spMock);
-        PowerMock.replay(StorageProvider.class);
+        });
+        mockedStorageProvider = mockStatic(StorageProvider.class);
+        mockedStorageProvider.when(StorageProvider::getInstance).thenReturn(spMock);
 
-        PowerMock.replay(ConfigurationHelper.class);
+        // Replaces PowerMock's suppress of MetadatenImagesHelper.createPagination: mocked instances do nothing.
+        mockedImagesHelper = mockConstruction(MetadatenImagesHelper.class);
 
         process = getProcess();
 
@@ -1113,13 +1108,22 @@ public class MetadataImportPerImagePluginTest {
             new File(masterDir, String.format("image_%04d.tif", i)).createNewFile();
         }
 
-        Ruleset ruleset = PowerMock.createMock(Ruleset.class);
-        ruleset.setTitel("ruleset");
-        ruleset.setDatei("ruleset.xml");
-        EasyMock.expect(ruleset.getDatei()).andReturn("ruleset.xml").anyTimes();
+        Ruleset ruleset = mock(Ruleset.class);
+        when(ruleset.getDatei()).thenReturn("ruleset.xml");
+        when(ruleset.getPreferences()).thenReturn(prefs);
         process.setRegelsatz(ruleset);
-        EasyMock.expect(ruleset.getPreferences()).andReturn(prefs).anyTimes();
-        PowerMock.replay(ruleset);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        mockedConfigHelper.close();
+        mockedVariableReplacer.close();
+        mockedMetadatenHelper.close();
+        mockedMetadataManager.close();
+        mockedProcessManager.close();
+        mockedHelper.close();
+        mockedStorageProvider.close();
+        mockedImagesHelper.close();
     }
 
     public Process getProcess() {
