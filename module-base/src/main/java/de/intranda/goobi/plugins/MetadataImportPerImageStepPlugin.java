@@ -78,6 +78,9 @@ import ugh.exceptions.TypeNotAllowedForParentException;
 @PluginImplementation
 @Log4j2
 public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
+
+    private static final long serialVersionUID = -8080513008646934094L;
+
     @Getter
     private String title = "intranda_step_metadata_import_per_image";
     @Getter
@@ -96,6 +99,10 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         this.returnPath = returnPath;
         this.step = step;
 
+        log.trace("MetadataImportPerImage step plugin initialized");
+    }
+
+    private void readConfiguration(Step step) {
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
         excelFilePath = myconfig.getString("excelFile", "");
         columnLabel = myconfig.getString("columnLabel", "Label");
@@ -111,11 +118,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     levelConfig.getString("@fallbackTitle", ""),
                     levelConfig.getString("@matchMetadata", ""),
                     levelConfig.getString("@matchMode", "exact"),
-                    levelConfig.getString("@matchDirection", "metadataMatchesExcel")
-            ));
+                    levelConfig.getString("@matchDirection", "metadataMatchesExcel")));
         }
-
-        log.info("MetadataImportPerImage step plugin initialized");
     }
 
     @Override
@@ -162,6 +166,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     @Override
     public PluginReturnValue run() {
         Process process = step.getProzess();
+        readConfiguration(step);
+
         log.info("Running MetadataImportPerImage plugin for process {}", process.getTitel());
 
         // Read metadata file — used for variable replacement and structure building
@@ -207,7 +213,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         List<java.nio.file.Path> images;
         try {
             String masterFolder = process.getImagesOrigDirectory(false);
-            images = StorageProvider.getInstance().listFiles(masterFolder).stream()
+            images = StorageProvider.getInstance()
+                    .listFiles(masterFolder)
+                    .stream()
                     .filter(p -> !Files.isDirectory(p))
                     .filter(p -> !p.getFileName().toString().startsWith("."))
                     .sorted()
@@ -287,9 +295,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Validates the plugin configuration against the given ruleset.
-     * Checks that hierarchy levels are defined and that their struct types
-     * and metadata fields exist in the ruleset.
+     * Validates the plugin configuration against the given ruleset. Checks that hierarchy levels are defined and that their struct types and metadata
+     * fields exist in the ruleset.
      */
     ValidationResult validateConfig(Prefs prefs) {
         ValidationResult result = new ValidationResult();
@@ -324,8 +331,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Validates the parsed Excel data against expected constraints.
-     * Collects all errors and warnings rather than failing on the first problem.
+     * Validates the parsed Excel data against expected constraints. Collects all errors and warnings rather than failing on the first problem.
      */
     ValidationResult validateExcelData(List<Map<String, String>> rows, int imageCount, int physPageCount,
             int sheetCount) {
@@ -430,8 +436,7 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Checks whether a string contains XML-invalid control characters
-     * (characters below 0x20 except tab, newline, and carriage return).
+     * Checks whether a string contains XML-invalid control characters (characters below 0x20 except tab, newline, and carriage return).
      */
     private static boolean containsInvalidXmlChars(String value) {
         if (value == null) {
@@ -447,8 +452,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Reads all data rows from the first sheet of the given Excel file.
-     * The first row is treated as the header. Each subsequent non-empty row becomes a map of column name to cell value.
+     * Reads all data rows from the first sheet of the given Excel file. The first row is treated as the header. Each subsequent non-empty row becomes
+     * a map of column name to cell value.
      *
      * @return a ParseResult containing the rows and sheet count
      */
@@ -540,10 +545,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Rebuilds the logical structure of the metadata document based on the Excel rows.
-     * Removes all existing children of the content root, then creates new hierarchy
-     * elements according to the configured levels. Sets pagination labels on physical
-     * pages from the label column. Links each page to its containing logical elements.
+     * Rebuilds the logical structure of the metadata document based on the Excel rows. Removes all existing children of the content root, then
+     * creates new hierarchy elements according to the configured levels. Sets pagination labels on physical pages from the label column. Links each
+     * page to its containing logical elements.
      */
     void buildStructure(Fileformat fileformat, Prefs prefs, List<Map<String, String>> rows)
             throws TypeNotAllowedAsChildException, MetadataTypeNotAllowedException,
@@ -662,8 +666,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Sets pagination labels on physical pages from the label column of the Excel rows.
-     * Updates existing metadata values or creates new ones as needed.
+     * Sets pagination labels on physical pages from the label column of the Excel rows. Updates existing metadata values or creates new ones as
+     * needed.
      */
     private void setPaginationLabels(List<Map<String, String>> rows, List<DocStruct> physicalPages,
             MetadataType labelType) throws MetadataTypeNotAllowedException {
@@ -682,8 +686,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Returns the logical DocStruct that represents the current process's content.
-     * If the logical root is an anchor (multi-volume parent), returns its first child instead.
+     * Returns the logical DocStruct that represents the current process's content. If the logical root is an anchor (multi-volume parent), returns
+     * its first child instead.
      */
     private DocStruct getContentRoot(DigitalDocument document) {
         DocStruct root = document.getLogicalDocStruct();
@@ -701,9 +705,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Recursively removes all TO-references from the given DocStruct and its children.
-     * This ensures that physical pages no longer hold back-references to structures
-     * that are about to be removed.
+     * Recursively removes all TO-references from the given DocStruct and its children. This ensures that physical pages no longer hold
+     * back-references to structures that are about to be removed.
      */
     private void removeReferencesRecursively(DocStruct node) {
         if (node.getAllToReferences() != null) {
@@ -719,11 +722,9 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Finds an existing child of {@code parent} that can be reused for the given hierarchy level and key.
-     * When {@code matchMetadata} is configured, matches by that metadata field using the configured match mode.
-     * When {@code matchMetadata} is blank, falls back to positional matching (first non-active child of
-     * matching struct type) and records a warning once per level.
-     * Returns {@code null} if no reusable match is found.
+     * Finds an existing child of {@code parent} that can be reused for the given hierarchy level and key. When {@code matchMetadata} is configured,
+     * matches by that metadata field using the configured match mode. When {@code matchMetadata} is blank, falls back to positional matching (first
+     * non-active child of matching struct type) and records a warning once per level. Returns {@code null} if no reusable match is found.
      */
     private DocStruct findReusableChild(DocStruct parent, HierarchyLevel levelConfig, String key,
             Prefs prefs, Set<DocStruct> alreadyActive, Set<HierarchyLevel> positionalMatchWarned) {
@@ -793,8 +794,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Recursively removes children that were not reused, cleaning up their page references.
-     * Reused children are kept but their own unreused sub-children are cleaned up recursively.
+     * Recursively removes children that were not reused, cleaning up their page references. Reused children are kept but their own unreused
+     * sub-children are cleaned up recursively.
      */
     private void removeUnreusedChildren(DocStruct parent, Set<DocStruct> reusedElements) {
         if (parent.getAllChildren() == null) {
@@ -811,8 +812,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     }
 
     /**
-     * Returns the grouping key for the given hierarchy level from the current row.
-     * Applies the configured fallback title when the column value is empty.
+     * Returns the grouping key for the given hierarchy level from the current row. Applies the configured fallback title when the column value is
+     * empty.
      */
     private String getKey(Map<String, String> row, int levelIndex) {
         HierarchyLevel levelConfig = hierarchyLevels.get(levelIndex);
