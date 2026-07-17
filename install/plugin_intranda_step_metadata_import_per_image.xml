@@ -36,10 +36,8 @@
                                  excelMatchesMetadata — Excel value is tested against metadata value
         -->
         <hierarchy>
-            <level structType="ArchivalObject" groupByColumn="URI" metadataField="TitleDocMain"
-                   matchMetadata="AeonResourceId" matchMode="endsWith"/>
             <level structType="ArchivalFolder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
-            <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain"/>
+            <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain" />
         </hierarchy>
     </config>
 
