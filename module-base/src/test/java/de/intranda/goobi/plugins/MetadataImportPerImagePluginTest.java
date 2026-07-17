@@ -574,6 +574,21 @@ public class MetadataImportPerImagePluginTest {
     }
 
     @Test
+    public void testValidateConfigMissingAdditionalMetadataType() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.hierarchyLevels = new ArrayList<>();
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", "", "", "exact", "metadataMatchesExcel",
+                List.of(new MetadataImportPerImageStepPlugin.AdditionalMetadata("Call Number", "NoSuchType"))));
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateConfig(prefs);
+
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("NoSuchType")),
+                "Error should mention the missing additional metadata type");
+    }
+
+    @Test
     public void testValidateLabelColumnMissing() {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.columnLabel = "MissingLabelColumn";
@@ -590,6 +605,28 @@ public class MetadataImportPerImagePluginTest {
         assertTrue(result.hasErrors(), "Expected errors");
         assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("MissingLabelColumn")),
                 "Error should mention the missing label column");
+    }
+
+    @Test
+    public void testValidateAdditionalMetadataColumnMissing() {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.columnLabel = "Label";
+        plugin.hierarchyLevels = new ArrayList<>();
+        plugin.hierarchyLevels.add(new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                "Chapter", "URI", "TitleDocMain", "", "", "exact", "metadataMatchesExcel",
+                List.of(new MetadataImportPerImageStepPlugin.AdditionalMetadata("Call Number", "TitleDocMainShort"))));
+
+        List<Map<String, String>> rows = new ArrayList<>();
+        Map<String, String> r = new HashMap<>();
+        r.put("URI", "uri1");
+        r.put("Label", "p1");
+        rows.add(r);
+
+        MetadataImportPerImageStepPlugin.ValidationResult result = plugin.validateExcelData(rows, 1, 1, 1);
+
+        assertTrue(result.hasErrors(), "Expected errors");
+        assertTrue(result.getErrors().stream().anyMatch(e -> e.contains("Call Number")),
+                "Error should mention the missing additional metadata column");
     }
 
     @Test
@@ -969,6 +1006,138 @@ public class MetadataImportPerImagePluginTest {
     }
 
     @Test
+    public void testBuildStructureAddsAdditionalMetadataFromFirstRow() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        // First (URI) level carries an additional metadata mapping: column "ExtraNote" -> type "TitleDocMainShort"
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "TitleDocMain", "exact", "metadataMatchesExcel",
+                        List.of(new MetadataImportPerImageStepPlugin.AdditionalMetadata("ExtraNote", "TitleDocMainShort"))),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder", "TitleDocMain", "exact",
+                        "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "", "TitleDocMain", "exact", "metadataMatchesExcel"));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+        // uri1 group (rows 0-4): first row has a value, a later row differs and must be ignored
+        rows.get(0).put("ExtraNote", "first-uri1");
+        rows.get(1).put("ExtraNote", "ignored-later-value");
+        // uri2 group (rows 5-9): no ExtraNote at all -> value blank -> no metadata created
+
+        plugin.buildStructure(ff, prefs, rows);
+
+        MetadataType shortTitleType = prefs.getMetadataTypeByName("TitleDocMainShort");
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1 = volume.getAllChildren().get(0);
+        DocStruct chapterUri2 = volume.getAllChildren().get(1);
+
+        // First row of the uri1 group wins; the differing later value is ignored
+        List<? extends Metadata> uri1Notes = chapterUri1.getAllMetadataByType(shortTitleType);
+        assertEquals(1, uri1Notes.size(), "Exactly one additional metadata expected for uri1");
+        assertEquals("first-uri1", uri1Notes.get(0).getValue());
+
+        // uri2 group had a blank value -> no additional metadata created
+        assertTrue(chapterUri2.getAllMetadataByType(shortTitleType).isEmpty(),
+                "Blank additional metadata value must not create metadata");
+    }
+
+    @Test
+    public void testBuildStructureDoesNotAddAdditionalMetadataOnReuse() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "TitleDocMain", "exact", "metadataMatchesExcel",
+                        List.of(new MetadataImportPerImageStepPlugin.AdditionalMetadata("ExtraNote", "TitleDocMainShort"))),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder", "TitleDocMain", "exact",
+                        "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "", "TitleDocMain", "exact", "metadataMatchesExcel"));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        // First build: no ExtraNote values -> chapterUri1 created without the additional metadata
+        List<Map<String, String>> rows = createTestRows();
+        plugin.buildStructure(ff, prefs, rows);
+
+        MetadataType shortTitleType = prefs.getMetadataTypeByName("TitleDocMainShort");
+        DocStruct chapterUri1 = ff.getDigitalDocument().getLogicalDocStruct()
+                .getAllChildren().get(0).getAllChildren().get(0);
+        assertTrue(chapterUri1.getAllMetadataByType(shortTitleType).isEmpty());
+
+        // Provide a value and rebuild: element is reused (matches by TitleDocMain="uri1"),
+        // so it must NOT gain the additional metadata
+        rows.get(0).put("ExtraNote", "late-value");
+        plugin.buildStructure(ff, prefs, rows);
+
+        DocStruct chapterUri1After = ff.getDigitalDocument().getLogicalDocStruct()
+                .getAllChildren().get(0).getAllChildren().get(0);
+        assertTrue(chapterUri1After.getAllMetadataByType(shortTitleType).isEmpty(),
+                "Reused element must not gain additional metadata");
+    }
+
+    @Test
+    public void testBuildStructureAddsMultipleAndNestedAdditionalMetadata() throws Exception {
+        MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
+        plugin.initialize(step, "something");
+        plugin.columnLabel = "Label";
+
+        // Mirrors the shipped example-config shape: multiple <metadata> entries on one level
+        // plus a <metadata> entry on a nested level.
+        plugin.hierarchyLevels = List.of(
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "URI", "TitleDocMain", "", "TitleDocMain", "exact", "metadataMatchesExcel",
+                        List.of(
+                                new MetadataImportPerImageStepPlugin.AdditionalMetadata("ExtraNote", "TitleDocMainShort"),
+                                new MetadataImportPerImageStepPlugin.AdditionalMetadata("ExtraId", "_ucc_id"))),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Chapter", "Structure", "TitleDocMain", "Unnamed folder", "TitleDocMain", "exact",
+                        "metadataMatchesExcel"),
+                new MetadataImportPerImageStepPlugin.HierarchyLevel(
+                        "Figure", "Caption", "TitleDocMain", "", "TitleDocMain", "exact", "metadataMatchesExcel",
+                        List.of(new MetadataImportPerImageStepPlugin.AdditionalMetadata("FigNote", "Author"))));
+
+        Fileformat ff = new MetsMods(prefs);
+        ff.read(metaTarget.toString());
+
+        List<Map<String, String>> rows = createTestRows();
+        // First row of the uri1 group carries both top-level additional values
+        rows.get(0).put("ExtraNote", "note-uri1");
+        rows.get(0).put("ExtraId", "id-uri1");
+        // First row of the first caption group (caption1, under folder1) carries the nested value
+        rows.get(0).put("FigNote", "fig-caption1");
+
+        plugin.buildStructure(ff, prefs, rows);
+
+        DocStruct volume = ff.getDigitalDocument().getLogicalDocStruct().getAllChildren().get(0);
+        DocStruct chapterUri1 = volume.getAllChildren().get(0);
+
+        // Both additional metadata on the top level are set from the first row
+        assertEquals("note-uri1", chapterUri1.getAllMetadataByType(
+                prefs.getMetadataTypeByName("TitleDocMainShort")).get(0).getValue());
+        assertEquals("id-uri1", chapterUri1.getAllMetadataByType(
+                prefs.getMetadataTypeByName("_ucc_id")).get(0).getValue());
+
+        // Nested-level additional metadata is set on the first Figure (caption1) under folder1
+        DocStruct folder1 = chapterUri1.getAllChildren().get(0);
+        DocStruct figCaption1 = folder1.getAllChildren().get(0);
+        assertEquals("Figure", figCaption1.getType().getName());
+        assertEquals("fig-caption1", figCaption1.getAllMetadataByType(
+                prefs.getMetadataTypeByName("Author")).get(0).getValue());
+    }
+
+    @Test
     public void testPositionalMatchingWarningOncePerLevel() throws Exception {
         MetadataImportPerImageStepPlugin plugin = new MetadataImportPerImageStepPlugin();
         plugin.initialize(step, "something");
@@ -1022,6 +1191,33 @@ public class MetadataImportPerImagePluginTest {
 
         // Verify page references: volume linked to all 10 pages
         assertEquals(10, volume.getAllToReferences().size());
+    }
+
+    @Test
+    public void testReadAdditionalMetadata() throws Exception {
+        String xml = "<level structType=\"Chapter\" groupByColumn=\"URI\">"
+                + "<metadata column=\"Call Number\" type=\"shelfmarksource\"/>"
+                + "<metadata column=\"Note\" type=\"TitleDocMainShort\"/>"
+                + "<metadata column=\"\" type=\"TitleDocMainShort\"/>"
+                + "<metadata column=\"Bad\" type=\"\"/>"
+                + "</level>";
+        org.apache.commons.configuration.XMLConfiguration cfg =
+                new org.apache.commons.configuration.XMLConfiguration();
+        // Goobi's ConfigPlugins configures an XPathExpressionEngine on plugin configs, which is what
+        // allows "@attr" style attribute access (as used by readAdditionalMetadata / readConfiguration).
+        // Mirror that here so this unit test reflects real runtime configuration behavior.
+        cfg.setExpressionEngine(new org.apache.commons.configuration.tree.xpath.XPathExpressionEngine());
+        cfg.setDelimiterParsingDisabled(true);
+        cfg.load(new java.io.StringReader(xml));
+
+        List<MetadataImportPerImageStepPlugin.AdditionalMetadata> result =
+                MetadataImportPerImageStepPlugin.readAdditionalMetadata(cfg);
+
+        assertEquals(2, result.size(), "Blank column and blank type entries must be skipped");
+        assertEquals("Call Number", result.get(0).column());
+        assertEquals("shelfmarksource", result.get(0).type());
+        assertEquals("Note", result.get(1).column());
+        assertEquals("TitleDocMainShort", result.get(1).type());
     }
 
     @BeforeEach

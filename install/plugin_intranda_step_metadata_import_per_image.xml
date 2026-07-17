@@ -34,10 +34,23 @@
               matchDirection   - Which value the matchMode operates on:
                                  metadataMatchesExcel (default) — metadata value is tested against Excel value
                                  excelMatchesMetadata — Excel value is tested against metadata value
+
+            Child elements (optional, any number):
+              <metadata column="…" type="…"/>
+                       - Imports an additional Excel column as extra metadata on this level's element.
+                         column - Excel column header whose value is used.
+                         type   - Metadata type name from the ruleset.
+                         The value is taken from the first row of each group; empty values are skipped;
+                         additional metadata is only set on newly created elements, not on reused ones.
         -->
         <hierarchy>
-            <level structType="ArchivalFolder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder"/>
-            <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain" />
+            <level structType="ArchivalFolder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder">
+                <metadata column="Call Number" type="shelfmarksource"/>
+                <metadata column="URI" type="_urn"/>
+            </level>
+            <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain">
+                <metadata column="Studio Notes" type="NoteSource"/>
+            </level>
         </hierarchy>
     </config>
 

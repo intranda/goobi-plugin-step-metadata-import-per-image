@@ -120,7 +120,8 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                     levelConfig.getString("@fallbackTitle", ""),
                     levelConfig.getString("@matchMetadata", ""),
                     levelConfig.getString("@matchMode", "exact"),
-                    levelConfig.getString("@matchDirection", "metadataMatchesExcel")));
+                    levelConfig.getString("@matchDirection", "metadataMatchesExcel"),
+                    readAdditionalMetadata(levelConfig)));
         }
     }
 
@@ -327,6 +328,11 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                 result.addError("Invalid matchDirection '" + level.matchDirection()
                         + "'; must be one of: " + VALID_MATCH_DIRECTIONS);
             }
+            for (AdditionalMetadata am : level.additionalMetadata()) {
+                if (prefs.getMetadataTypeByName(am.type()) == null) {
+                    result.addError("Metadata field not found in ruleset: " + am.type());
+                }
+            }
         }
 
         return result;
@@ -362,6 +368,15 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
         for (HierarchyLevel level : hierarchyLevels) {
             if (StringUtils.isNotBlank(level.groupByColumn()) && !rows.get(0).containsKey(level.groupByColumn())) {
                 result.addError("Missing column in Excel: " + level.groupByColumn());
+            }
+        }
+
+        // Check missing additional metadata columns
+        for (HierarchyLevel level : hierarchyLevels) {
+            for (AdditionalMetadata am : level.additionalMetadata()) {
+                if (!rows.get(0).containsKey(am.column())) {
+                    result.addError("Missing column in Excel: " + am.column());
+                }
             }
         }
 
@@ -648,6 +663,27 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
                             }
                         }
                     }
+
+                    for (AdditionalMetadata am : levelConfig.additionalMetadata()) {
+                        String amValue = row.getOrDefault(am.column(), "").trim();
+                        if (amValue.isEmpty()) {
+                            continue;
+                        }
+                        MetadataType amType = prefs.getMetadataTypeByName(am.type());
+                        if (amType == null) {
+                            log.warn("Metadata type '{}' not found in ruleset; skipping additional metadata"
+                                    + " for column '{}'", am.type(), am.column());
+                            continue;
+                        }
+                        Metadata amMd = new Metadata(amType);
+                        amMd.setValue(amValue);
+                        try {
+                            struct.addMetadata(amMd);
+                        } catch (MetadataTypeNotAllowedException e) {
+                            log.warn("Cannot add metadata '{}' to '{}': {}", am.type(),
+                                    levelConfig.structType(), e.getMessage());
+                        }
+                    }
                 }
 
                 currentKeys[lvl] = key;
@@ -829,8 +865,34 @@ public class MetadataImportPerImageStepPlugin implements IStepPluginVersion2 {
     private static final Set<String> VALID_MATCH_MODES = Set.of("exact", "endsWith", "startsWith", "contains");
     private static final Set<String> VALID_MATCH_DIRECTIONS = Set.of("metadataMatchesExcel", "excelMatchesMetadata");
 
+    /**
+     * Reads the {@code <metadata column="…" type="…"/>} child elements of a hierarchy {@code <level>} configuration.
+     * Entries with a blank column or blank type are skipped.
+     */
+    static List<AdditionalMetadata> readAdditionalMetadata(HierarchicalConfiguration levelConfig) {
+        List<AdditionalMetadata> result = new ArrayList<>();
+        for (HierarchicalConfiguration metaConfig : levelConfig.configurationsAt("metadata")) {
+            String column = metaConfig.getString("@column", "").trim();
+            String type = metaConfig.getString("@type", "").trim();
+            if (!column.isEmpty() && !type.isEmpty()) {
+                result.add(new AdditionalMetadata(column, type));
+            }
+        }
+        return result;
+    }
+
     record HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle,
-            String matchMetadata, String matchMode, String matchDirection) {
+            String matchMetadata, String matchMode, String matchDirection, List<AdditionalMetadata> additionalMetadata) {
+
+        // Backward-compatible constructor for callers/tests that do not configure additional metadata.
+        HierarchyLevel(String structType, String groupByColumn, String metadataField, String fallbackTitle,
+                String matchMetadata, String matchMode, String matchDirection) {
+            this(structType, groupByColumn, metadataField, fallbackTitle, matchMetadata, matchMode, matchDirection,
+                    List.of());
+        }
+    }
+
+    record AdditionalMetadata(String column, String type) {
     }
 
     static class ValidationResult {
