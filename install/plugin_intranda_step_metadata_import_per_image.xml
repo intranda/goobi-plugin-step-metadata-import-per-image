@@ -44,13 +44,18 @@
                          additional metadata is only set on newly created elements, not on reused ones.
         -->
         <hierarchy>
+            <level structType="ArchivalObject" groupByColumn="URI" metadataField="TitleDocMain" matchMetadata="AeonResourceId" matchMode="endsWith"/>
+
             <level structType="ArchivalFolder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder">
                 <metadata column="Call Number" type="shelfmarksource"/>
                 <metadata column="URI" type="_urn"/>
             </level>
+
             <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain">
                 <metadata column="Studio Notes" type="NoteSource"/>
             </level>
+            
+            
         </hierarchy>
     </config>
 
