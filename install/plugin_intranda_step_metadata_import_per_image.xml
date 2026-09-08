@@ -45,18 +45,32 @@
         -->
         <hierarchy>
             <level structType="ArchivalObject" groupByColumn="URI" metadataField="TitleDocMain" matchMetadata="AeonResourceId" matchMode="endsWith"/>
-
             <level structType="ArchivalFolder" groupByColumn="Structure" metadataField="TitleDocMain" fallbackTitle="Unnamed folder">
                 <metadata column="Call Number" type="shelfmarksource"/>
                 <metadata column="URI" type="_urn"/>
             </level>
-
             <level structType="ArchivalItem" groupByColumn="Caption" metadataField="TitleDocMain">
                 <metadata column="Studio Notes" type="NoteSource"/>
             </level>
-            
-            
         </hierarchy>
     </config>
 
+    <config>
+        <project>Manuscript_Project</project>
+        <step>Metadata enrichment</step>
+
+        <excelFile>{importpath}metadata.xlsx</excelFile>
+        <columnLabel>Seitenlabel</columnLabel>
+        <paginationLabelMetadata>logicalPageNumber</paginationLabelMetadata>
+
+        <hierarchy>
+            <level structType="Chapter" groupByColumn="Kapitel"
+                metadataField="TitleDocMain" fallbackTitle="Ohne Kapitel"/>
+            <level structType="Figure" groupByColumn="Abbildung"
+                metadataField="TitleDocMain" fallbackTitle="Ohne Bezeichnung">
+                <metadata column="Fotograf" type="Photographer"/>
+                <metadata column="URN" type="_urn"/>
+            </level>
+        </hierarchy>
+    </config>
 </config_plugin>
