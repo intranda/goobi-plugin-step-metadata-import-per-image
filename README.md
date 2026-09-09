@@ -15,11 +15,11 @@ More information about the functionality of this plugin and the complete documen
 
 Detail                      | Description
 --------------------------- | ----------------------
-**Plugin identifier**       | -
+**Plugin identifier**       | intranda_step_metadata_import_per_image
 **Plugin type**             | step
 **Licence**                 | GPL 2.0 or newer
-**Documentation (German)**  | This plugin is not yet documented.
-**Documentation (English)** | This plugin is not yet documented.
+**Documentation (German)**  | https://docs.goobi.io/de/workflow/plugins/step/goobi-plugin-step-metadata-import-per-image
+**Documentation (English)** | https://docs.goobi.io/en/workflow/plugins/step/goobi-plugin-step-metadata-import-per-image
 
 ## Goobi details
 
