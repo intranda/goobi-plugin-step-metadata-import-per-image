@@ -2,7 +2,7 @@
 title: Metadata import per image from Excel
 identifier: intranda_step_metadata_import_per_image
 description: Step plugin for Goobi workflow that builds a logical structure hierarchy from an Excel file containing one row per image of a process
-published: false
+published: true
 keywords:
     - Goobi workflow
     - Plugin
